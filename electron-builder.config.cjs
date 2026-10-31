@@ -1,15 +1,12 @@
-const path = require('node:path')
-const rootPackage = require(path.join(__dirname, '..', 'package.json'))
-
 module.exports = {
-  appId: 'io.github.furey.fetchtv',
+  appId: 'io.github.furey.fetch-my-recordings',
   productName: 'Fetch My Recordings',
   copyright: 'Copyright © James Furey. GPL-3.0-or-later. An independent tool, not made, endorsed, or supported by Fetch TV.',
   directories: { output: 'release', buildResources: 'build' },
   files: ['dist/**/*', 'package.json'],
   asar: true,
   electronLanguages: ['en', 'en-GB', 'en_GB'],
-  extraMetadata: { version: rootPackage.version, main: 'dist/main.mjs' },
+  extraMetadata: { main: 'dist/main.mjs' },
   artifactName: 'Fetch-My-Recordings-${os}-${arch}.${ext}',
   publish: null,
   electronFuses: {

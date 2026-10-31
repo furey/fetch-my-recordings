@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { loadSavedFiles } from '../../fetchtv.js'
+import { loadSavedFiles } from 'fetchtv'
 
 const SIZE_TOLERANCE = 1024
 

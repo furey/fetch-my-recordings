@@ -4,11 +4,10 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const appRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
-const repoRoot = path.dirname(appRoot)
 const distDir = path.join(appRoot, 'dist')
 
-const readRootVersion = async () =>
-  JSON.parse(await fs.readFile(path.join(repoRoot, 'package.json'), 'utf8')).version
+const readAppVersion = async () =>
+  JSON.parse(await fs.readFile(path.join(appRoot, 'package.json'), 'utf8')).version
 
 const bundleMain = async (version) => build({
   entryPoints: [path.join(appRoot, 'src', 'main.js')],
@@ -18,7 +17,7 @@ const bundleMain = async (version) => build({
   format: 'esm',
   target: 'node22',
   external: ['electron'],
-  define: { FETCHTV_VERSION: JSON.stringify(version) },
+  define: { APP_VERSION: JSON.stringify(version) },
   banner: { js: "import { createRequire as fetchtvCreateRequire } from 'node:module'; const require = fetchtvCreateRequire(import.meta.url);" },
   legalComments: 'none',
   logLevel: 'warning'
@@ -31,5 +30,5 @@ const copyStatic = async () => {
 
 await fs.rm(distDir, { recursive: true, force: true })
 await fs.mkdir(distDir, { recursive: true })
-await bundleMain(await readRootVersion())
+await bundleMain(await readAppVersion())
 await copyStatic()

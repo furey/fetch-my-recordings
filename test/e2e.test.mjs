@@ -349,7 +349,7 @@ test('the window is locked down: isolated, sandboxed, no Node in the page, stric
     }))
     assert.equal(pageGlobals.require, 'undefined')
     assert.equal(pageGlobals.process, 'undefined')
-    assert.ok(pageGlobals.api.every(name => typeof name === 'string') && pageGlobals.api.length === 14)
+    assert.ok(pageGlobals.api.every(name => typeof name === 'string') && pageGlobals.api.length === 15)
     const inlineScriptRan = await page.evaluate(() => new Promise(resolve => {
       window.inlineRan = false
       const script = document.createElement('script')
@@ -408,8 +408,9 @@ const openApp = async (app) => {
   if (screenshotDir) await captureAtSize({ app, page, name: '0-welcome-minimum', width: 640, height: 560 })
   await page.getByRole('button', { name: 'About this app' }).click()
   await page.locator('#independence', { hasText: 'It is not made, endorsed, or supported by Fetch TV.' }).waitFor()
-  const githubLinks = page.getByRole('button', { name: 'fetchtv on GitHub' })
-  assert.equal(await page.locator('#info-body').getByRole('button', { name: 'fetchtv on GitHub' }).getAttribute('title'), 'https://github.com/furey/fetchtv')
+  const githubLinks = page.getByRole('button', { name: 'Fetch My Recordings on GitHub' })
+  assert.equal(await page.locator('#info-body').getByRole('button', { name: 'Fetch My Recordings on GitHub' }).getAttribute('title'), 'https://github.com/furey/fetch-my-recordings')
+  assert.equal(await page.locator('#info-body').getByRole('button', { name: 'fetchtv command-line tool' }).getAttribute('title'), 'https://github.com/furey/fetchtv')
   assert.equal(await githubLinks.count(), 2)
   await capture({ app, page, name: '0-about' })
   await page.keyboard.press('Escape')

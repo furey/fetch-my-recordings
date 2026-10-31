@@ -1,7 +1,7 @@
 import { app, BrowserWindow, Menu, dialog, ipcMain, nativeTheme, powerSaveBlocker, session, shell } from 'electron'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { syncCleanupLockFiles } from '../../fetchtv.js'
+import { syncCleanupLockFiles } from 'fetchtv'
 import { connectToAddress, describeBox, findBoxes, parseBoxAddress } from './boxes.js'
 import { describeFolder } from './folders.js'
 import { listRecordings, pickEpisodes } from './recordings.js'
@@ -9,7 +9,8 @@ import { startSave } from './saving.js'
 import { createSettings } from './settings.js'
 import { createHistory, savedStates } from './history.js'
 
-const PROJECT_URL = 'https://github.com/furey/fetchtv'
+const APP_REPOSITORY_URL = 'https://github.com/furey/fetch-my-recordings'
+const FETCHTV_REPOSITORY_URL = 'https://github.com/furey/fetchtv'
 const distDir = path.dirname(fileURLToPath(import.meta.url))
 const rendererPage = path.join(distDir, 'renderer', 'index.html')
 const rendererUrl = pathToFileURL(rendererPage).href
@@ -30,9 +31,9 @@ const main = () => {
   app.enableSandbox()
   app.setAboutPanelOptions({
     applicationName: 'Fetch My Recordings',
-    applicationVersion: FETCHTV_VERSION,
+    applicationVersion: APP_VERSION,
     copyright: 'Free and open source under the GPL-3.0-or-later licence.',
-    credits: 'Built on the fetchtv command-line tool. Fetch My Recordings is an independent, free tool made by a Fetch customer. It is not made, endorsed, or supported by Fetch TV. Fetch is a trademark of its owner. The GitHub mark is from GitHub Octicons, MIT licence, copyright GitHub Inc.'
+    credits: 'Built on the fetchtv command-line tool (github.com/furey/fetchtv). Fetch My Recordings is an independent, free tool made by a Fetch customer. It is not made, endorsed, or supported by Fetch TV. Fetch is a trademark of its owner. The GitHub mark is from GitHub Octicons, MIT licence, copyright GitHub Inc. The Figtree and Geist Mono fonts are under the SIL Open Font Licence 1.1.'
   })
   app.on('second-instance', focusWindow)
   app.on('window-all-closed', () => app.quit())
@@ -77,7 +78,7 @@ const createWindow = () => {
 
 const registerIpc = ({ settings, history }) => {
   handle('app:info', async () => ({
-    version: FETCHTV_VERSION,
+    version: APP_VERSION,
     settings: await settings.read(),
     defaultFolder: defaultSaveFolder()
   }))
@@ -163,7 +164,12 @@ const registerIpc = ({ settings, history }) => {
   })
 
   handle('link:project', async () => {
-    await shell.openExternal(PROJECT_URL)
+    await shell.openExternal(APP_REPOSITORY_URL)
+    return {}
+  })
+
+  handle('link:fetchtv', async () => {
+    await shell.openExternal(FETCHTV_REPOSITORY_URL)
     return {}
   })
 }

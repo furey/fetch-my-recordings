@@ -5,8 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import NodeSsdp from 'node-ssdp'
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
-const mediaServerFixture = path.join(repoRoot, 'test', 'fixtures', 'media-server.xml')
+const mediaServerFixture = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'media-server.xml')
 
 export const FETCH_BOX_OVERSTATEMENT = 84
 export const MB = 1024 * 1024

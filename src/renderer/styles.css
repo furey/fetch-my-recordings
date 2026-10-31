@@ -285,6 +285,11 @@ p {
   .link:hover { background: var(--primary-tint); }
 }
 
+.link.is-inline {
+  padding: 0;
+  border-radius: 4px;
+}
+
 .actions {
   display: flex;
   justify-content: center;
