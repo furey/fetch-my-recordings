@@ -457,22 +457,15 @@ const humanMove = async ({ page, to }) => {
   if (distance < 2) return
   const duration = Math.min(700, Math.max(300, 230 + 160 * Math.log2(1 + distance / 60))) * between(0.9, 1.1)
   const direction = { x: dx / distance, y: dy / distance }
-  const overshoot = Math.min(7, distance * 0.035) * between(0.5, 1)
-  const end = { x: to.x + direction.x * overshoot, y: to.y + direction.y * overshoot }
   const bend = distance * between(0.05, 0.12) * (random() < 0.5 ? -1 : 1)
-  const control = { x: (from.x + end.x) / 2 - direction.y * bend, y: (from.y + end.y) / 2 + direction.x * bend }
+  const control = { x: (from.x + to.x) / 2 - direction.y * bend, y: (from.y + to.y) / 2 + direction.x * bend }
   await animatePointer({ page, duration, at: (t) => {
     const s = minimumJerk(t)
     const inverse = 1 - s
     return {
-      x: inverse * inverse * from.x + 2 * inverse * s * control.x + s * s * end.x,
-      y: inverse * inverse * from.y + 2 * inverse * s * control.y + s * s * end.y
+      x: inverse * inverse * from.x + 2 * inverse * s * control.x + s * s * to.x,
+      y: inverse * inverse * from.y + 2 * inverse * s * control.y + s * s * to.y
     }
-  } })
-  if (overshoot < 0.5) return
-  await animatePointer({ page, duration: between(100, 150), at: (t) => {
-    const s = minimumJerk(t)
-    return { x: end.x + (to.x - end.x) * s, y: end.y + (to.y - end.y) * s }
   } })
 }
 
