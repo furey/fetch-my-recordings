@@ -133,6 +133,10 @@ test('next run: remembers the box and folder, saves in the Plex layout, then ski
     await page.getByRole('button', { name: 'Save again' }).click()
     await waitForFinish({ page, heading: 'All done', timeout: 60000 })
     assert.deepEqual(await totals(page), { 'Saved': '0', 'Already saved': '10', 'Not saved': '0' })
+    await page.locator('.stat[data-list="already"]').click()
+    await page.locator('#info-dialog').getByRole('heading', { name: 'Already saved' }).waitFor()
+    assert.equal(await page.locator('#result-list-already .row').count(), 10)
+    await page.keyboard.press('Escape')
 
     await page.getByRole('button', { name: 'Choose other recordings' }).click()
     await page.locator('#saved-summary', { hasText: '0 new · 10 already saved' }).waitFor()
@@ -201,10 +205,23 @@ test('a recording the box keeps cutting off is listed as not saved, with a plain
     await page.getByRole('button', { name: 'Save', exact: true }).click()
     await page.getByRole('heading', { name: 'Some not saved' }).waitFor({ timeout: 60000 })
     assert.deepEqual(await totals(page), { 'Saved': '3', 'Already saved': '0', 'Not saved': '1' })
-    await page.getByRole('heading', { name: 'Not saved', exact: true }).waitFor()
-    await page.locator('#problem-list').getByText('Master Cook · S1 E2 - Mystery Box').waitFor()
-    await page.locator('#problem-list .row-main').first().click()
-    await page.locator('#problem-list').getByText('The copy stopped part way, even after trying again.').waitFor()
+    assert.equal(await page.locator('#problem-list').count(), 0)
+    assert.equal(await page.locator('.stat[data-list="already"]').evaluate(tile => tile.tagName), 'DIV')
+    await page.locator('.stat[data-list="saved"]').click()
+    const dialog = page.locator('#info-dialog')
+    await dialog.getByRole('heading', { name: 'Saved recordings' }).waitFor()
+    await dialog.getByText('Master Cook · S1 E1 - Auditions').waitFor()
+    await page.keyboard.press('Escape')
+    await dialog.waitFor({ state: 'hidden' })
+    await page.locator('.stat[data-list="not-saved"]').focus()
+    await page.keyboard.press('Enter')
+    await dialog.getByRole('heading', { name: 'Not saved' }).waitFor()
+    await dialog.getByText('Master Cook · S1 E2 - Mystery Box').waitFor()
+    await dialog.locator('.problem-row .row-main').first().click()
+    await dialog.getByText('The copy stopped part way, even after trying again.').waitFor()
+    await dialog.getByRole('button', { name: 'Save again' }).click()
+    await page.getByRole('heading', { name: 'Saving', exact: true }).waitFor()
+    await page.getByRole('heading', { name: 'Some not saved' }).waitFor({ timeout: 60000 })
     await capture({ app, page, name: '4-finished-not-saved' })
   } finally {
     await app.close()
@@ -485,11 +502,9 @@ const capture = async ({ app, page, name }) => {
   await page.screenshot({ path: path.join(screenshotDir, `${name}.png`) })
 }
 
-const totals = (page) => page.locator('#save-totals').evaluate(list => {
-  const terms = [...list.querySelectorAll('dt')].map(term => term.textContent)
-  const values = [...list.querySelectorAll('dd')].map(value => value.textContent)
-  return Object.fromEntries(terms.map((term, index) => [term, values[index]]))
-})
+const totals = (page) => page.locator('#save-totals').evaluate(list => Object.fromEntries(
+  [...list.querySelectorAll('.stat')].map(tile => [tile.querySelector('.stat-label').textContent, tile.querySelector('.stat-value').textContent])
+))
 
 const assertSameBytes = async ({ box, folder, file, title }) => {
   const item = [...box.catalogue.items.values()].find(entry => entry.title === title)

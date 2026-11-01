@@ -989,12 +989,22 @@ p {
 .stat:first-child { border-radius: var(--radius-card) 0 0 var(--radius-card); }
 .stat:last-child { border-radius: 0 var(--radius-card) var(--radius-card) 0; }
 
-.stat dt {
+.stat {
+  display: block;
+  border: 0;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+}
+
+.stat-label {
+  display: block;
   font-size: 14px;
   color: var(--text-2);
 }
 
-.stat dd {
+.stat-value {
+  display: block;
   margin: 4px 0 0;
   font-family: var(--font-mono);
   font-size: 32px;
@@ -1002,8 +1012,35 @@ p {
   font-weight: 500;
 }
 
-.stat.is-good dd { color: var(--primary); }
-.stat.is-bad dd { color: var(--live-text); }
+.stat-more {
+  display: block;
+  margin-top: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.stat.is-clickable {
+  cursor: pointer;
+  transition: background-color var(--motion) var(--ease);
+}
+
+@media (hover: hover) {
+  .stat.is-clickable:hover { background: var(--surface-2); }
+  .stat.is-clickable:hover .stat-more { color: var(--text-1); }
+}
+
+.stat.is-good .stat-value { color: var(--primary); }
+.stat.is-bad .stat-value { color: var(--live-text); }
+.stat.is-bad .stat-more { color: var(--live-text); }
+
+.row-main.is-plain {
+  cursor: default;
+}
+
+.dialog-actions {
+  margin: 16px 0 0;
+}
 
 .row-side-value {
   display: block;
@@ -1409,6 +1446,14 @@ body.is-hidden .mark.is-animated .mark-chips {
 
 .row-detail, .folder-parent, .box-address, #about-line, .space, .example, .notice, .drawer-text {
   text-wrap: pretty;
+}
+
+@media (hover: hover) {
+  .dialog-body .row-main.is-clickable:hover { background: var(--surface-2); }
+}
+
+.stat-label, .stat-more {
+  text-wrap: balance;
 }
 
 h1, h2, h3, h4, button, label, figcaption, dt, .btn, [role="tab"] {
