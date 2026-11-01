@@ -201,7 +201,8 @@ test('a recording the box keeps cutting off is listed as not saved, with a plain
     await page.getByRole('button', { name: 'Save', exact: true }).click()
     await page.getByRole('heading', { name: 'Some not saved' }).waitFor({ timeout: 60000 })
     assert.deepEqual(await totals(page), { 'Saved': '3', 'Already saved': '0', 'Not saved': '1' })
-    await page.locator('#problem-list').getByText('Harbour Lights: S1 E2 - Low Tide').waitFor()
+    await page.getByRole('heading', { name: 'Not saved', exact: true }).waitFor()
+    await page.locator('#problem-list').getByText('Harbour Lights · S1 E2 - Low Tide').waitFor()
     await page.locator('#problem-list .row-main').first().click()
     await page.locator('#problem-list').getByText('The copy stopped part way, even after trying again.').waitFor()
     await capture({ app, page, name: '4-finished-not-saved' })
@@ -326,6 +327,43 @@ test('welcome mark: the animation rests on the exact mark.svg shapes, loops, and
 
 const attributesOf = (text) => Object.fromEntries([...text.matchAll(/([a-z-]+)="([^"]*)"/g)].map(([, name, value]) => [name, value]))
 
+test('after a save: the card opens How to watch your recordings with three tabs and allow-listed links only', async () => {
+  const box = await startFakeBox({ shows: [demoShows({ size: MB })[0]] })
+  const userData = await freshDir('user-data-watch')
+  const saveFolder = await freshDir('watch')
+  await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify({ lastAddress: box.address, lastFolder: saveFolder }))
+  const app = await launchApp({ userData })
+  try {
+    await app.evaluate(({ shell }) => {
+      globalThis.openedLinks = []
+      shell.openExternal = async (url) => { globalThis.openedLinks.push(url) }
+    })
+    const page = await openApp(app)
+    await page.getByRole('heading', { name: 'Choose recordings' }).waitFor()
+    await page.getByRole('button', { name: 'Next' }).click()
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await page.getByRole('heading', { name: 'All done' }).waitFor({ timeout: 60000 })
+    await page.locator('#what-now-card').getByRole('heading', { name: 'I have my files, but now what?' }).waitFor()
+    await page.getByRole('button', { name: 'How to watch your recordings' }).click()
+    const dialog = page.locator('#info-dialog')
+    await dialog.getByRole('heading', { name: 'How to watch your recordings' }).waitFor()
+    await dialog.getByRole('button', { name: 'Download VLC' }).click()
+    await dialog.getByRole('button', { name: 'Record free-to-air' }).click()
+    await dialog.getByRole('heading', { name: 'Record free-to-air TV without Fetch' }).waitFor()
+    await dialog.getByRole('button', { name: 'Learn about Freetvarr' }).click()
+    assert.deepEqual(await page.evaluate(() => window.fetchtv.openLink({ name: 'https://example.com/' })), { error: 'unknown-link' })
+    await page.waitForTimeout(200)
+    assert.deepEqual(await app.evaluate(() => globalThis.openedLinks), ['https://www.videolan.org/vlc/', 'https://furey.github.io/freetvarr/'])
+    await dialog.getByRole('button', { name: 'On your TV' }).click()
+    await dialog.getByRole('button', { name: 'Save again with Plex names' }).click()
+    await page.getByRole('heading', { name: 'Choose a folder' }).waitFor()
+    assert.equal(await page.getByRole('switch', { name: 'Names for Plex, Jellyfin or Kodi' }).getAttribute('aria-checked'), 'true')
+  } finally {
+    await app.close()
+    await box.stop()
+  }
+})
+
 test('the window is locked down: isolated, sandboxed, no Node in the page, strict CSP', async () => {
   const box = await startFakeBox()
   const userData = await freshDir('user-data-security')
@@ -349,7 +387,7 @@ test('the window is locked down: isolated, sandboxed, no Node in the page, stric
     }))
     assert.equal(pageGlobals.require, 'undefined')
     assert.equal(pageGlobals.process, 'undefined')
-    assert.ok(pageGlobals.api.every(name => typeof name === 'string') && pageGlobals.api.length === 15)
+    assert.ok(pageGlobals.api.every(name => typeof name === 'string') && pageGlobals.api.length === 16)
     const inlineScriptRan = await page.evaluate(() => new Promise(resolve => {
       window.inlineRan = false
       const script = document.createElement('script')
