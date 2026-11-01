@@ -597,7 +597,7 @@ const saveRow = (episode) => {
   return h('li', { className: 'row save-row', 'data-episode': episode.id },
     h('div', { className: 'row-main' },
       h('span', { className: 'row-text' },
-        h('span', { className: 'row-title' }, `${show?.title ?? ''}: ${episode.title}`),
+        h('span', { className: 'row-title' }, `${show?.title ?? ''} · ${episode.title}`),
         bar),
       status))
 }
@@ -676,7 +676,12 @@ const finishedScreen = () => {
         stat({ label: 'Not saved', value: summary.notSaved, tone: summary.notSaved > 0 ? 'is-bad' : '' }),
         summary.stopped > 0 ? stat({ label: 'Stopped', value: summary.stopped }) : null),
       problemRows.length > 0
-        ? h('ul', { className: 'table', id: 'problem-list' }, ...problemRows.map(episode => problemRow(episode)))
+        ? h('section', { className: 'finished-section', 'aria-labelledby': 'problem-heading' },
+          h('h2', { id: 'problem-heading' }, 'Not saved'),
+          h('ul', { className: 'table', id: 'problem-list' }, ...problemRows.map(episode => problemRow(episode))))
+        : null,
+      summary.saved + summary.alreadySaved > 0
+        ? h('section', { className: 'finished-section' }, whatNowCard())
         : null
     ],
     actions: [
@@ -687,6 +692,73 @@ const finishedScreen = () => {
     ]
   }
 }
+
+const WHAT_NOW_SECTIONS = [
+  { id: 'computer', tab: 'On this computer', heading: 'On this computer' },
+  { id: 'tv', tab: 'On your TV', heading: 'On your TV' },
+  { id: 'record', tab: 'Record free-to-air', heading: 'Record free-to-air TV without Fetch' }
+]
+
+const whatNowSection = (id) => {
+  const section = WHAT_NOW_SECTIONS.find(item => item.id === id)
+  return [
+    illustration(`watch-${id}`),
+    h('h3', {}, section.heading),
+    ...whatNowBody(id)
+  ]
+}
+
+const whatNowBody = (id) => {
+  if (id === 'computer') {
+    return [
+      h('p', {}, 'Open them in VLC, a free video player. QuickTime can’t play most of them.'),
+      h('p', {}, linkButton({ label: 'Download VLC', name: 'vlc' }))
+    ]
+  }
+  if (id === 'tv') {
+    return [h('ul', { className: 'options' },
+      h('li', {}, h('strong', {}, 'USB drive. '), 'Copy the folder to a USB drive for a TV or media player that plays .ts files.'),
+      h('li', {}, h('strong', {}, 'Apple TV, phone or tablet. '), 'Open them in Infuse or VLC from a shared folder.'),
+      h('li', {}, h('strong', {}, 'Plex, Jellyfin or Kodi. '), state.forPlex
+        ? 'Add the folder to your library. The files already have the names these apps need.'
+        : 'Add the folder to your library. These apps need the Plex, Jellyfin or Kodi names. Saving again with them makes a second copy.',
+      state.forPlex ? null : h('p', { className: 'option-action' }, h('button', { type: 'button', className: 'btn', id: 'save-with-plex-names', onclick: saveAgainWithPlexNames }, 'Save again with Plex names'))))]
+  }
+  return [
+    h('p', {}, 'If you have, or are happy to buy, a TV tuner for your aerial (such as an HDHomeRun) and a computer or NAS that stays on, Freetvarr records free-to-air TV into the same kind of library. It’s free, from the same author.'),
+    h('p', {}, linkButton({ label: 'Learn about Freetvarr', name: 'freetvarr' }))
+  ]
+}
+
+const saveAgainWithPlexNames = () => {
+  document.getElementById('info-dialog').close()
+  state.forPlex = true
+  goToFolderStep()
+}
+
+const linkButton = ({ label, name }) => h('button', { type: 'button', className: 'btn', 'data-link': name, onclick: () => api.openLink({ name }) }, label)
+
+const whatNowInfo = () => {
+  const panel = h('div', { className: 'what-now-panel' })
+  const buttons = WHAT_NOW_SECTIONS.map(section => h('button', { type: 'button', className: 'segment what-now-tab', 'data-section': section.id, onclick: () => show(section.id) },
+    lineIcon(section.id), h('span', {}, section.tab)))
+  const show = (id) => {
+    buttons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.section === id)))
+    panel.replaceChildren(...whatNowSection(id))
+  }
+  show('computer')
+  openInfo({
+    title: 'How to watch your recordings',
+    variant: 'tabbed',
+    body: [h('div', { className: 'segmented is-fill', role: 'group', 'aria-label': 'Where to watch' }, ...buttons), panel]
+  })
+}
+
+const whatNowCard = () => h('div', { className: 'what-now-card', id: 'what-now-card' },
+  illustration('watch-card'),
+  h('div', { className: 'what-now-card-text' },
+    h('h2', {}, 'I have my files, but now what?'),
+    h('button', { type: 'button', className: 'btn', id: 'what-now', onclick: whatNowInfo }, 'How to watch your recordings')))
 
 const finishedInfo = () => openInfo({
   title: 'Your recordings',
@@ -715,11 +787,11 @@ const problemRow = (episode) => {
   const row = state.save.rows.get(episode.id)
   const show = state.shows.find(item => item.episodes.includes(episode))
   const reason = h('p', { className: 'drawer-text', hidden: true }, row.reason || 'Not started.')
-  const reveal = h('span', { className: 'row-reveal' }, 'Why')
+  const reveal = h('span', { className: 'row-reveal is-always' }, 'Why')
   const main = h('div', { className: 'row-main is-clickable', role: 'button', tabindex: '0', 'aria-expanded': 'false' },
     h('span', { className: 'row-text' },
-      h('span', { className: 'row-title' }, `${show?.title ?? ''}: ${episode.title}`),
-      h('span', { className: 'row-detail' }, statusLabel(row))),
+      h('span', { className: 'row-title' }, `${show?.title ?? ''} · ${episode.title}`),
+      statusLabel(row) === 'Not saved' ? null : h('span', { className: 'row-detail' }, statusLabel(row))),
     h('span', { className: 'row-side' }, reveal))
   const toggle = () => {
     reason.hidden = !reason.hidden
@@ -762,9 +834,10 @@ const setUpDialog = () => {
   document.getElementById('info-close').addEventListener('click', () => dialog.close())
 }
 
-const openInfo = ({ title, body }) => {
+const openInfo = ({ title, body, variant = '' }) => {
   const dialog = document.getElementById('info-dialog')
   const opener = document.activeElement
+  dialog.className = `dialog${variant ? ` is-${variant}` : ''}`
   document.getElementById('info-title').textContent = title
   document.getElementById('info-body').replaceChildren(...body.filter(Boolean))
   dialog.addEventListener('close', () => opener?.focus?.(), { once: true })

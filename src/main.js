@@ -11,6 +11,10 @@ import { createHistory, savedStates } from './history.js'
 
 const APP_REPOSITORY_URL = 'https://github.com/furey/fetch-my-recordings'
 const FETCHTV_REPOSITORY_URL = 'https://github.com/furey/fetchtv'
+const EXTERNAL_LINKS = {
+  vlc: 'https://www.videolan.org/vlc/',
+  freetvarr: 'https://furey.github.io/freetvarr/'
+}
 const distDir = path.dirname(fileURLToPath(import.meta.url))
 const rendererPage = path.join(distDir, 'renderer', 'index.html')
 const rendererUrl = pathToFileURL(rendererPage).href
@@ -170,6 +174,13 @@ const registerIpc = ({ settings, history }) => {
 
   handle('link:fetchtv', async () => {
     await shell.openExternal(FETCHTV_REPOSITORY_URL)
+    return {}
+  })
+
+  handle('link:open', async ({ name }) => {
+    const url = Object.hasOwn(EXTERNAL_LINKS, name) ? EXTERNAL_LINKS[name] : null
+    if (!url) return { error: 'unknown-link' }
+    await shell.openExternal(url)
     return {}
   })
 }

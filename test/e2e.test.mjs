@@ -52,15 +52,15 @@ test('first run: no box found, type the address, choose episodes, save in the de
     await page.getByRole('button', { name: /Test Fetch Box/ }).click()
     await page.getByRole('heading', { name: 'Choose recordings' }).waitFor()
 
-    const harbour = page.locator('li.show-row[data-show="Harbour Lights"]')
-    await harbour.locator('.row-main').first().click()
-    await harbour.getByLabel('S1 E4 - Safe Harbour').uncheck()
-    assert.equal(await harbour.locator('.row-main input[type="checkbox"]').first().evaluate(input => input.indeterminate), true)
-    const coastal = page.locator('li.show-row[data-show="Coastal Kitchen"]')
+    const masterCook = page.locator('li.show-row[data-show="Master Cook"]')
+    await masterCook.locator('.row-main').first().click()
+    await masterCook.getByLabel('S1 E4 - Elimination').uncheck()
+    assert.equal(await masterCook.locator('.row-main input[type="checkbox"]').first().evaluate(input => input.indeterminate), true)
+    const coastal = page.locator('li.show-row[data-show="Bigger Brother"]')
     await coastal.locator('.row-main').first().click()
-    assert.equal(await coastal.getByLabel('S2 E6 - Sourdough').isDisabled(), true)
+    assert.equal(await coastal.getByLabel('S2 E6 - Eviction Night').isDisabled(), true)
     await capture({ app, page, name: '2-recordings-episodes' })
-    await page.getByText('8 recordings selected').waitFor()
+    await page.getByText('9 recordings selected').waitFor()
 
     await page.getByRole('button', { name: 'Next' }).click()
     await page.getByRole('heading', { name: 'Choose a folder' }).waitFor()
@@ -71,23 +71,23 @@ test('first run: no box found, type the address, choose episodes, save in the de
     await capture({ app, page, name: '3-folder' })
 
     await page.getByRole('button', { name: 'Save', exact: true }).click()
-    await page.getByRole('heading', { name: 'All done' }).waitFor({ timeout: 60000 })
+    await waitForFinish({ page, heading: 'All done', timeout: 60000 })
     await capture({ app, page, name: '4-finished' })
-    assert.deepEqual(await totals(page), { 'Saved': '8', 'Already saved': '0', 'Not saved': '0' })
+    assert.deepEqual(await totals(page), { 'Saved': '9', 'Already saved': '0', 'Not saved': '0' })
 
     const expected = [
       'Backyard Builders/S3 E1 - The Shed.ts',
-      'Harbour Lights/S1 E1 - The Lighthouse Keeper.ts',
-      'Harbour Lights/S1 E3 - Storm Warning.ts',
-      'Morning Weather Report/Morning Weather Report.ts',
-      'The Night Market/The Night Market.ts'
+      'Master Cook/S1 E1 - Auditions.ts',
+      'Master Cook/S1 E3 - Team Challenge.ts',
+      'The Footy Panel/The Footy Panel.ts',
+      'Mission Improbable/Mission Improbable.ts'
     ]
     const files = await listFiles(saveFolder)
     for (const file of expected) assert.ok(files.includes(file), `${file} missing from ${files.join(', ')}`)
-    assert.equal(files.some(file => file.includes('Safe Harbour')), false)
-    assert.equal(files.some(file => file.includes('Sourdough')), false)
+    assert.equal(files.some(file => file.includes('Elimination')), false)
+    assert.equal(files.some(file => file.includes('Eviction Night')), false)
     assert.equal(files.some(file => /\.(part|lock)$/.test(file)), false)
-    await assertSameBytes({ box, folder: saveFolder, file: 'Harbour Lights/S1 E1 - The Lighthouse Keeper.ts', title: 'S1 E1 - The Lighthouse Keeper' })
+    await assertSameBytes({ box, folder: saveFolder, file: 'Master Cook/S1 E1 - Auditions.ts', title: 'S1 E1 - Auditions' })
     assert.ok(files.includes('fetchtv.json'))
   } finally {
     await app.close()
@@ -120,26 +120,26 @@ test('next run: remembers the box and folder, saves in the Plex layout, then ski
     assert.equal(await infoButton.evaluate(button => document.activeElement === button), true)
     await capture({ app, page, name: '3-folder-plex' })
     await page.getByRole('button', { name: 'Save', exact: true }).click()
-    await page.getByRole('heading', { name: 'All done' }).waitFor({ timeout: 60000 })
+    await waitForFinish({ page, heading: 'All done', timeout: 60000 })
 
     const files = await listFiles(saveFolder)
     for (const file of [
-      'Harbour Lights/Season 01/Harbour Lights - S01E04.ts',
+      'Master Cook/Season 01/Master Cook - S01E04.ts',
       'Backyard Builders/Season 03/Backyard Builders - S03E02.ts',
-      'Coastal Kitchen/Season 02/Coastal Kitchen - S02E05.ts',
-      'The Night Market/The Night Market.ts'
+      'Bigger Brother/Season 02/Bigger Brother - S02E05.ts',
+      'Mission Improbable/Mission Improbable.ts'
     ]) assert.ok(files.includes(file), `${file} missing from ${files.join(', ')}`)
 
     await page.getByRole('button', { name: 'Save again' }).click()
-    await page.getByRole('heading', { name: 'All done' }).waitFor({ timeout: 60000 })
-    assert.deepEqual(await totals(page), { 'Saved': '0', 'Already saved': '9', 'Not saved': '0' })
+    await waitForFinish({ page, heading: 'All done', timeout: 60000 })
+    assert.deepEqual(await totals(page), { 'Saved': '0', 'Already saved': '10', 'Not saved': '0' })
 
     await page.getByRole('button', { name: 'Choose other recordings' }).click()
-    await page.locator('#saved-summary', { hasText: '0 new · 9 already saved' }).waitFor()
+    await page.locator('#saved-summary', { hasText: '0 new · 10 already saved' }).waitFor()
     assert.equal(await page.getByRole('button', { name: 'Next' }).isDisabled(), true)
     await page.getByRole('button', { name: 'Select all' }).click()
     await page.getByRole('button', { name: 'Next' }).click()
-    await page.locator('#already-here', { hasText: '9 already here' }).waitFor()
+    await page.locator('#already-here', { hasText: '10 already here' }).waitFor()
   } finally {
     await app.close()
     await box.stop()
@@ -148,7 +148,7 @@ test('next run: remembers the box and folder, saves in the Plex layout, then ski
 
 test('stop part way, then save again carries on from the partial file', async () => {
   const box = await startFakeBox({
-    shows: [{ title: 'Harbour Lights', items: [{ title: 'S1 E1 - The Lighthouse Keeper', size: 24 * MB, duration: '0:58:12' }, { title: 'S1 E2 - Low Tide', size: 24 * MB, duration: '0:57:40' }] }],
+    shows: [{ title: 'Master Cook', items: [{ title: 'S1 E1 - Auditions', size: 24 * MB, duration: '0:58:12' }, { title: 'S1 E2 - Mystery Box', size: 24 * MB, duration: '0:57:40' }] }],
     quirks: { rangeNotSatisfiable: false },
     bytesPerSecond: 4 * MB
   })
@@ -175,11 +175,11 @@ test('stop part way, then save again carries on from the partial file', async ()
 
     const before = box.requests.length
     await page.getByRole('button', { name: 'Save again' }).click()
-    await page.getByRole('heading', { name: 'All done' }).waitFor({ timeout: 60000 })
+    await waitForFinish({ page, heading: 'All done', timeout: 60000 })
     const resumed = box.requests.slice(before).filter(request => request.range && request.range !== 'bytes=0-')
     assert.ok(resumed.length > 0, 'the second save did not resume with a Range request')
-    await assertSameBytes({ box, folder: saveFolder, file: 'Harbour Lights/S1 E1 - The Lighthouse Keeper.ts', title: 'S1 E1 - The Lighthouse Keeper' })
-    await assertSameBytes({ box, folder: saveFolder, file: 'Harbour Lights/S1 E2 - Low Tide.ts', title: 'S1 E2 - Low Tide' })
+    await assertSameBytes({ box, folder: saveFolder, file: 'Master Cook/S1 E1 - Auditions.ts', title: 'S1 E1 - Auditions' })
+    await assertSameBytes({ box, folder: saveFolder, file: 'Master Cook/S1 E2 - Mystery Box.ts', title: 'S1 E2 - Mystery Box' })
   } finally {
     await app.close()
     await box.stop()
@@ -201,7 +201,8 @@ test('a recording the box keeps cutting off is listed as not saved, with a plain
     await page.getByRole('button', { name: 'Save', exact: true }).click()
     await page.getByRole('heading', { name: 'Some not saved' }).waitFor({ timeout: 60000 })
     assert.deepEqual(await totals(page), { 'Saved': '3', 'Already saved': '0', 'Not saved': '1' })
-    await page.locator('#problem-list').getByText('Harbour Lights: S1 E2 - Low Tide').waitFor()
+    await page.getByRole('heading', { name: 'Not saved', exact: true }).waitFor()
+    await page.locator('#problem-list').getByText('Master Cook · S1 E2 - Mystery Box').waitFor()
     await page.locator('#problem-list .row-main').first().click()
     await page.locator('#problem-list').getByText('The copy stopped part way, even after trying again.').waitFor()
     await capture({ app, page, name: '4-finished-not-saved' })
@@ -241,36 +242,36 @@ test('saved recordings: still there is unticked, moved or deleted is ticked with
     await page.getByRole('heading', { name: 'Choose recordings' }).waitFor()
     await page.locator('#saved-summary', { hasText: '4 new' }).waitFor()
     await page.getByRole('button', { name: 'Select none' }).click()
-    const harbour = page.locator('li.show-row[data-show="Harbour Lights"]')
-    await harbour.locator('.row-main').first().click()
-    await harbour.getByLabel('S1 E1 - The Lighthouse Keeper').check()
-    await harbour.getByLabel('S1 E2 - Low Tide').check()
+    const masterCook = page.locator('li.show-row[data-show="Master Cook"]')
+    await masterCook.locator('.row-main').first().click()
+    await masterCook.getByLabel('S1 E1 - Auditions').check()
+    await masterCook.getByLabel('S1 E2 - Mystery Box').check()
     await page.getByRole('button', { name: 'Next' }).click()
     await page.getByRole('button', { name: 'Save', exact: true }).click()
-    await page.getByRole('heading', { name: 'All done' }).waitFor({ timeout: 60000 })
+    await waitForFinish({ page, heading: 'All done', timeout: 60000 })
   } finally {
     await first.close()
   }
-  await fs.rm(path.join(saveFolder, 'Harbour Lights', 'S1 E2 - Low Tide.ts'))
+  await fs.rm(path.join(saveFolder, 'Master Cook', 'S1 E2 - Mystery Box.ts'))
   const second = await launchApp({ userData })
   try {
     const page = await openApp(second)
     await page.locator('#saved-summary', { hasText: '2 new · 1 already saved · 1 moved or deleted' }).waitFor()
-    const harbour = page.locator('li.show-row[data-show="Harbour Lights"]')
-    await harbour.locator('.row-main').first().click()
-    const row = (title) => harbour.locator('.episode-row', { hasText: title })
+    const masterCook = page.locator('li.show-row[data-show="Master Cook"]')
+    await masterCook.locator('.row-main').first().click()
+    const row = (title) => masterCook.locator('.episode-row', { hasText: title })
     assert.equal(await row('S1 E1').locator('.row-main').getAttribute('data-saved'), 'saved')
-    assert.equal(await harbour.getByLabel('S1 E1 - The Lighthouse Keeper').isChecked(), false)
+    assert.equal(await masterCook.getByLabel('S1 E1 - Auditions').isChecked(), false)
     await row('S1 E1').getByText('Saved', { exact: true }).waitFor()
     assert.equal(await row('S1 E2').locator('.row-main').getAttribute('data-saved'), 'missing')
-    assert.equal(await harbour.getByLabel('S1 E2 - Low Tide').isChecked(), true)
+    assert.equal(await masterCook.getByLabel('S1 E2 - Mystery Box').isChecked(), true)
     await row('S1 E2').getByRole('button', { name: 'Moved or deleted' }).click()
-    await page.locator('#missing-detail', { hasText: 'to Harbour Lights/S1 E2 - Low Tide.ts. It is no longer there.' }).waitFor()
-    assert.equal(await harbour.getByLabel('S1 E2 - Low Tide').isChecked(), true)
+    await page.locator('#missing-detail', { hasText: 'to Master Cook/S1 E2 - Mystery Box.ts. It is no longer there.' }).waitFor()
+    assert.equal(await masterCook.getByLabel('S1 E2 - Mystery Box').isChecked(), true)
     await page.keyboard.press('Escape')
     await page.locator('#info-dialog').waitFor({ state: 'hidden' })
     assert.equal(await row('S1 E3').locator('.row-main').getAttribute('data-saved'), 'new')
-    assert.equal(await harbour.getByLabel('S1 E3 - Storm Warning').isChecked(), true)
+    assert.equal(await masterCook.getByLabel('S1 E3 - Team Challenge').isChecked(), true)
     await capture({ app: second, page, name: '2-recordings-history' })
   } finally {
     await second.close()
@@ -282,10 +283,10 @@ test('saved recordings: a fetchtv.json in the folder marks files saved by the co
   const box = await startFakeBox({ shows: [demoShows()[0]] })
   const userData = await freshDir('user-data-cli')
   const saveFolder = await freshDir('cli')
-  const item = [...box.catalogue.items.values()].find(entry => entry.title === 'S1 E3 - Storm Warning')
-  await fs.mkdir(path.join(saveFolder, 'Harbour Lights'), { recursive: true })
-  await fs.writeFile(path.join(saveFolder, 'Harbour Lights', 'S1 E3 - Storm Warning.ts'), recordingBytes(item))
-  await fs.writeFile(path.join(saveFolder, 'fetchtv.json'), JSON.stringify({ [item.id]: { title: item.title, size: item.actualSize, path: 'Harbour Lights/S1 E3 - Storm Warning.ts' } }))
+  const item = [...box.catalogue.items.values()].find(entry => entry.title === 'S1 E3 - Team Challenge')
+  await fs.mkdir(path.join(saveFolder, 'Master Cook'), { recursive: true })
+  await fs.writeFile(path.join(saveFolder, 'Master Cook', 'S1 E3 - Team Challenge.ts'), recordingBytes(item))
+  await fs.writeFile(path.join(saveFolder, 'fetchtv.json'), JSON.stringify({ [item.id]: { title: item.title, size: item.actualSize, path: 'Master Cook/S1 E3 - Team Challenge.ts' } }))
   await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify({ lastAddress: box.address, lastFolder: saveFolder }))
   const app = await launchApp({ userData })
   try {
@@ -326,6 +327,43 @@ test('welcome mark: the animation rests on the exact mark.svg shapes, loops, and
 
 const attributesOf = (text) => Object.fromEntries([...text.matchAll(/([a-z-]+)="([^"]*)"/g)].map(([, name, value]) => [name, value]))
 
+test('after a save: the card opens How to watch your recordings with three tabs and allow-listed links only', async () => {
+  const box = await startFakeBox({ shows: [demoShows({ size: MB })[0]] })
+  const userData = await freshDir('user-data-watch')
+  const saveFolder = await freshDir('watch')
+  await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify({ lastAddress: box.address, lastFolder: saveFolder }))
+  const app = await launchApp({ userData })
+  try {
+    await app.evaluate(({ shell }) => {
+      globalThis.openedLinks = []
+      shell.openExternal = async (url) => { globalThis.openedLinks.push(url) }
+    })
+    const page = await openApp(app)
+    await page.getByRole('heading', { name: 'Choose recordings' }).waitFor()
+    await page.getByRole('button', { name: 'Next' }).click()
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await waitForFinish({ page, heading: 'All done', timeout: 60000 })
+    await page.locator('#what-now-card').getByRole('heading', { name: 'I have my files, but now what?' }).waitFor()
+    await page.getByRole('button', { name: 'How to watch your recordings' }).click()
+    const dialog = page.locator('#info-dialog')
+    await dialog.getByRole('heading', { name: 'How to watch your recordings' }).waitFor()
+    await dialog.getByRole('button', { name: 'Download VLC' }).click()
+    await dialog.getByRole('button', { name: 'Record free-to-air' }).click()
+    await dialog.getByRole('heading', { name: 'Record free-to-air TV without Fetch' }).waitFor()
+    await dialog.getByRole('button', { name: 'Learn about Freetvarr' }).click()
+    assert.deepEqual(await page.evaluate(() => window.fetchtv.openLink({ name: 'https://example.com/' })), { error: 'unknown-link' })
+    await page.waitForTimeout(200)
+    assert.deepEqual(await app.evaluate(() => globalThis.openedLinks), ['https://www.videolan.org/vlc/', 'https://furey.github.io/freetvarr/'])
+    await dialog.getByRole('button', { name: 'On your TV' }).click()
+    await dialog.getByRole('button', { name: 'Save again with Plex names' }).click()
+    await page.getByRole('heading', { name: 'Choose a folder' }).waitFor()
+    assert.equal(await page.getByRole('switch', { name: 'Names for Plex, Jellyfin or Kodi' }).getAttribute('aria-checked'), 'true')
+  } finally {
+    await app.close()
+    await box.stop()
+  }
+})
+
 test('the window is locked down: isolated, sandboxed, no Node in the page, strict CSP', async () => {
   const box = await startFakeBox()
   const userData = await freshDir('user-data-security')
@@ -349,7 +387,7 @@ test('the window is locked down: isolated, sandboxed, no Node in the page, stric
     }))
     assert.equal(pageGlobals.require, 'undefined')
     assert.equal(pageGlobals.process, 'undefined')
-    assert.ok(pageGlobals.api.every(name => typeof name === 'string') && pageGlobals.api.length === 15)
+    assert.ok(pageGlobals.api.every(name => typeof name === 'string') && pageGlobals.api.length === 16)
     const inlineScriptRan = await page.evaluate(() => new Promise(resolve => {
       window.inlineRan = false
       const script = document.createElement('script')
@@ -424,6 +462,15 @@ const captureAtSize = async ({ app, page, name, width, height }) => {
   await app.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0].setContentSize(size.width, size.height), { width, height })
   await capture({ app, page, name })
   await app.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0].setContentSize(size[0], size[1]), original)
+}
+
+const waitForFinish = async ({ page, heading, timeout }) => {
+  try {
+    await page.getByRole('heading', { name: heading }).waitFor({ timeout })
+  } catch (error) {
+    const screen = await page.locator('main').innerText().catch(() => '(no screen text)')
+    throw new Error(`"${heading}" did not appear within ${timeout} ms. The screen showed:\n${screen}`, { cause: error })
+  }
 }
 
 const stubFolderPicker = ({ app, folder }) => app.evaluate(({ dialog }, chosen) => {
