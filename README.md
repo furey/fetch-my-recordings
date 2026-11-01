@@ -33,6 +33,7 @@ Prefer a terminal, a NAS, or Docker? See [Related projects](#related-projects).
 
 - [Overview](#overview)
 - [Download](#download)
+- [Requirements](#requirements)
 - [First open](#first-open)
 - [Using the app](#using-the-app)
 - [Built on fetchtv](#built-on-fetchtv)
@@ -68,12 +69,21 @@ If you are not sure which Mac you have, download the first Mac file; it works on
 
 All versions are on the [releases page](https://github.com/furey/fetch-my-recordings/releases).
 
+## Requirements
+
+- **Mac**: macOS 13 Ventura or later, with an Apple chip or an Intel chip.
+- **Windows**: Windows 10 or later, 64-bit.
+- **Linux**: a 64-bit computer (x86_64 or ARM64) with a major distribution, such as Ubuntu, Fedora, or Debian, in a version that still gets updates.
+
+On an older Mac, use the command-line tool [`fetchtv`](https://github.com/furey/fetchtv) instead. On macOS 12 Monterey, it needs Node.js 22, because Node.js 24 and later need macOS 13.5.
+
 ## First open
 
 - [First open overview](#first-open-overview)
 - [First open on a Mac](#first-open-on-a-mac)
 - [First open on Windows](#first-open-on-windows)
 - [First open on Linux](#first-open-on-linux)
+- [If the app does not open](#if-the-app-does-not-open)
 
 ### First open overview
 
@@ -254,6 +264,20 @@ If the app does not open on Ubuntu 22.04 or later, install FUSE, which every App
 - On Ubuntu 24.04 or later, run `sudo apt install libfuse2t64`.
 
 If the app still does not open on Ubuntu 24.04 or later, start it from a terminal with `--no-sandbox` after the file name. This turns off Electron's sandbox (a limit on what the app's window can do), so use the option only for this app.
+
+### If the app does not open
+
+On some computers, often ones with extra security software, the app's graphics process cannot start. When that happens, the app restarts itself with safer graphics settings. If you still see no window, open the app again. Each failed start turns on more of the safer settings, and the app keeps them after one works.
+
+If the app still does not open, [open an issue](https://github.com/furey/fetch-my-recordings/issues) and attach the file `main.log` from the log folder:
+
+| Computer | Log folder                                               |
+| -------- | -------------------------------------------------------- |
+| Mac      | `~/Library/Application Support/Fetch My Recordings/logs` |
+| Windows  | `%APPDATA%\Fetch My Recordings\logs`                     |
+| Linux    | `~/.config/Fetch My Recordings/logs`                     |
+
+When the app is open, choose **Help** → **Open log folder** to go there. On Windows and Linux, press the **Alt** key to show the menu.
 
 ## Using the app
 
