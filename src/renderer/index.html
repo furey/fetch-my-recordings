@@ -9,12 +9,16 @@
 </head>
 <body>
   <header class="top" id="top">
-    <img class="mark" src="mark.svg" width="36" height="36" alt="Fetch My Recordings">
+    <button type="button" class="home" id="home" aria-label="Back to start">
+      <img class="mark" src="mark.svg" width="36" height="36" alt="">
+      <svg class="home-back" viewBox="0 0 36 36" width="36" height="36" aria-hidden="true"><circle cx="18" cy="18" r="16" fill="none" stroke="currentColor" stroke-width="2"/><path d="M25 18H11M17 12l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span class="home-tip" aria-hidden="true">Back to start</span>
+    </button>
     <ol class="steps" id="steps" aria-label="Steps">
-      <li data-step="1"><span class="step-bar"></span><span class="step-label">Find your Fetch box</span></li>
-      <li data-step="2"><span class="step-bar"></span><span class="step-label">Choose recordings</span></li>
-      <li data-step="3"><span class="step-bar"></span><span class="step-label">Choose a folder</span></li>
-      <li data-step="4"><span class="step-bar"></span><span class="step-label">Save</span></li>
+      <li data-step="1"><span class="step"><span class="step-bar"></span><span class="step-label">Find your Fetch box</span></span></li>
+      <li data-step="2"><span class="step"><span class="step-bar"></span><span class="step-label">Choose recordings</span></span></li>
+      <li data-step="3"><span class="step"><span class="step-bar"></span><span class="step-label">Choose a folder</span></span></li>
+      <li data-step="4"><span class="step"><span class="step-bar"></span><span class="step-label">Save</span></span></li>
     </ol>
   </header>
   <main id="view" tabindex="-1"></main>

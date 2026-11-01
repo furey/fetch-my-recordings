@@ -71,9 +71,7 @@ const main = async () => {
     await app.evaluate(({ shell }) => { shell.openPath = async () => '' })
     const page = await app.firstWindow()
     await page.getByRole('heading', { name: 'Fetch My Recordings' }).waitFor()
-    await page.evaluate((address) => {
-      state.pendingSearch = state.pendingSearch.then(({ boxes }) => ({ boxes: boxes.map(found => ({ ...found, address })) }))
-    }, values.address)
+    await showAddressAs({ page, real: box.address, shown: values.address })
     await installTracker(page)
     await page.mouse.move(pointer.x, pointer.y)
     pointerLog.push({ time: Date.now(), x: pointer.x, y: pointer.y })
@@ -583,5 +581,16 @@ const logSounds = async (page) => {
   })
   return () => page.evaluate(() => window.demoSounds)
 }
+
+const showAddressAs = ({ page, real, shown }) => page.evaluate(({ real, shown }) => {
+  const rewrite = (root) => {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+    while (walker.nextNode()) {
+      if (walker.currentNode.nodeValue.includes(real)) walker.currentNode.nodeValue = walker.currentNode.nodeValue.replaceAll(real, shown)
+    }
+  }
+  new MutationObserver(() => rewrite(document.body)).observe(document.body, { subtree: true, childList: true, characterData: true })
+  rewrite(document.body)
+}, { real, shown })
 
 await main()

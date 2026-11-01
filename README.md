@@ -129,6 +129,8 @@ When the app first searches for your Fetch box, your Mac asks whether Fetch My R
 
 If you clicked **Don't Allow**, open **System Settings** → **Privacy & Security** → **Local Network**, then turn on **Fetch My Recordings**.
 
+If you use a firewall app such as Little Snitch, allow Fetch My Recordings to connect on your local network. If the app found no box while the firewall question was open, click **Search again**.
+
 You do these steps once. After that, the app opens with a double-click.
 
 > [!TIP]<br>
@@ -204,6 +206,8 @@ Click **Start** on the welcome screen. The app then takes you through these step
 2. **Choose recordings**: every recording you have not saved before starts ticked. Click **Show** next to a show to tick or untick single episodes. A recording that is still recording cannot be saved until it ends.
 3. **Choose a folder**: the app shows the free space in the folder and the space the recordings need. Turn on **Names for Plex, Jellyfin or Kodi** if you watch recordings in one of those apps. The files are then saved as `Show/Season 01/Show - S01E02.ts`.
 4. **Save**: the app shows the progress of each recording. Your computer stays awake until the save finishes. Click **Stop** at any time.
+
+To go back, click a finished step at the top of the window. The app keeps your box, your ticks, and your folder. Click the app icon in the top-left corner to go back to the welcome screen. While recordings are saving, the earlier steps are locked, and the app icon asks before it stops the save.
 
 <p align="center">
   <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/app-welcome.png" alt="The Fetch My Recordings welcome screen with the Start button" width="720"/>

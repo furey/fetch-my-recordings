@@ -19,7 +19,7 @@ const main = async () => {
   const box = await startFakeBox({ shows: demoShows({ size: 70 * MB }), name: 'Lounge room box' })
   await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify({ lastAddress: box.address, lastFolder: folder }))
   try {
-    await withApp({ userData }, async ({ page, shot }) => {
+    await withApp({ userData, realAddress: box.address }, async ({ page, shot }) => {
       await page.getByRole('heading', { name: 'Fetch My Recordings' }).waitFor()
       await page.waitForTimeout(2500)
       await shot(path.join(out, 'app-welcome.png'))
@@ -35,7 +35,7 @@ const main = async () => {
       await page.getByRole('heading', { name: 'All done' }).waitFor({ timeout: 60000 })
     })
     await fs.rm(path.join(folder, 'Master Cook', 'S1 E2 - Mystery Box.ts'))
-    await withApp({ userData }, async ({ page, shot }) => {
+    await withApp({ userData, realAddress: box.address }, async ({ page, shot }) => {
       await page.getByRole('button', { name: 'Start', exact: true }).click()
       await page.getByRole('heading', { name: 'Choose recordings' }).waitFor({ timeout: 30000 })
       const masterCook = page.locator('li.show-row[data-show="Master Cook"]')
@@ -62,7 +62,7 @@ const main = async () => {
   }
 }
 
-const withApp = async ({ userData }, run) => {
+const withApp = async ({ userData, realAddress }, run) => {
   const env = { ...process.env, FETCHTV_USER_DATA: userData, FETCHTV_DISCOVERY: 'off' }
   const app = values.executable
     ? await electron.launch({ executablePath: values.executable, env })
@@ -71,9 +71,7 @@ const withApp = async ({ userData }, run) => {
     await app.evaluate(({ shell }) => { shell.openPath = async () => '' })
     const page = await app.firstWindow()
     await page.getByRole('heading', { name: 'Fetch My Recordings' }).waitFor()
-    await page.evaluate((address) => {
-      state.pendingSearch = state.pendingSearch.then(({ boxes }) => ({ boxes: boxes.map(found => ({ ...found, address })) }))
-    }, values.address)
+    await showAddressAs({ page, real: realAddress, shown: values.address })
     await page.evaluate(() => document.fonts.ready)
     const shot = async (file) => {
       await page.mouse.move(0, 0)
@@ -86,5 +84,16 @@ const withApp = async ({ userData }, run) => {
     await app.close()
   }
 }
+
+const showAddressAs = ({ page, real, shown }) => page.evaluate(({ real, shown }) => {
+  const rewrite = (root) => {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+    while (walker.nextNode()) {
+      if (walker.currentNode.nodeValue.includes(real)) walker.currentNode.nodeValue = walker.currentNode.nodeValue.replaceAll(real, shown)
+    }
+  }
+  new MutationObserver(() => rewrite(document.body)).observe(document.body, { subtree: true, childList: true, characterData: true })
+  rewrite(document.body)
+}, { real, shown })
 
 await main()
