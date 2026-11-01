@@ -82,7 +82,7 @@ Fetch My Recordings is free and open source. Anyone can read its code in this re
 The app talks only to the Fetch box on your home network. It reads and writes only the folder you choose and its own settings. It deletes nothing from the Fetch box.
 
 > [!NOTE]<br>
-> The Mac steps for macOS 14 Sonoma and earlier use screenshots. All other pictures in the steps below are illustrations of the system messages. The wording on your computer can differ a little.
+> The pictures in the steps below are illustrations of the system messages, not screenshots. The wording on your computer can differ a little.
 
 ### First open on a Mac
 
@@ -94,16 +94,14 @@ Your steps depend on your macOS version. To check it, open the Apple menu and ch
 
 #### Mac: macOS 14 Sonoma and earlier
 
-These pictures are screenshots from macOS 14 Sonoma, with the app downloaded in Chrome. The name field in the password box is replaced with "Your name".
-
 1. Open the `.dmg` file you downloaded.
 2. Drag **Fetch My Recordings** into the **Applications** folder.
 3. Open the **Applications** folder and double-click **Fetch My Recordings**.
 4. A message says the app cannot be opened because Apple cannot check it for malicious software. Click **OK**.
 
    <p align="center">
-     <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/first-open-mac14-1-cant-open.png" alt="Screenshot of the macOS Sonoma message that Fetch My Recordings.app cannot be opened because Apple cannot check it for malicious software, with the OK button marked" width="320"/>
-     <br/><em>The first macOS message</em>
+     <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/first-open-mac14-1-cant-open.png" alt="Illustration of the macOS Sonoma message that Fetch My Recordings.app cannot be opened because Apple cannot check it for malicious software, with the OK button marked" width="600"/>
+     <br/><em>Illustration: the first macOS message</em>
    </p>
 
 5. Open the Apple menu and choose **System Settings**.
@@ -112,23 +110,23 @@ These pictures are screenshots from macOS 14 Sonoma, with the app downloaded in 
 8. Next to the message that "Fetch My Recordings.app" was blocked from use, click **Open Anyway**.
 
    <p align="center">
-     <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/first-open-mac14-2-open-anyway.png" alt="Screenshot of Privacy and Security settings saying Fetch My Recordings.app was blocked from use, with the Open Anyway button marked" width="520"/>
-     <br/><em>Open Anyway in Privacy &amp; Security</em>
+     <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/first-open-mac14-2-open-anyway.png" alt="Illustration of Privacy and Security settings saying Fetch My Recordings.app was blocked from use, with the Open Anyway button marked" width="600"/>
+     <br/><em>Illustration: Open Anyway in Privacy &amp; Security</em>
    </p>
 
 9. Type your Mac login password when your Mac asks.
 10. Click **Modify Settings**.
 
    <p align="center">
-     <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/first-open-mac14-3-password.png" alt="Screenshot of the Mac password prompt with the Modify Settings button marked" width="300"/>
-     <br/><em>The password prompt</em>
+     <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/first-open-mac14-3-password.png" alt="Illustration of the Mac password prompt with the Modify Settings button marked" width="600"/>
+     <br/><em>Illustration: the password prompt</em>
    </p>
 
  1. Click **Open** in the message that appears next.
 
    <p align="center">
-     <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/first-open-mac14-4-open.png" alt="Screenshot of the same macOS message with Open, Show in Finder, and Cancel buttons, with the Open button marked" width="300"/>
-     <br/><em>The second macOS message</em>
+     <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/first-open-mac14-4-open.png" alt="Illustration of the same macOS message with Open, Show in Finder, and Cancel buttons, with the Open button marked" width="600"/>
+     <br/><em>Illustration: the second macOS message</em>
    </p>
 
  1. Wait for the app to open.
@@ -143,8 +141,6 @@ When the app first searches for your Fetch box, your Mac can ask whether Fetch M
 You do these steps once. After that, the app opens with a double-click.
 
 #### Mac: macOS 15 Sequoia and later
-
-The pictures in these steps are illustrations of the system messages, not screenshots.
 
 1. Open the `.dmg` file you downloaded.
 2. Drag **Fetch My Recordings** into the **Applications** folder.
@@ -191,14 +187,9 @@ You do these steps once. After that, the app opens with a double-click.
 
 #### Mac: Firewall apps
 
-If you use a firewall app such as Little Snitch, it can ask about Fetch My Recordings each time it meets a new device on your network. Choose to allow local network connections for Fetch My Recordings, and choose an option that lasts, not **Once**. Otherwise the firewall asks again for every device, and the app can fail to find your Fetch box.
+If you use a firewall app such as Little Snitch, it can ask about Fetch My Recordings each time it meets a new device on your network. Allow local network connections for Fetch My Recordings, and choose an option that lasts. Otherwise the firewall asks again for every device, and the app can fail to find your Fetch box.
 
-In Little Snitch, choose **Only local network**, then click **Allow**.
-
-<p align="center">
-  <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/first-open-firewall-little-snitch.png" alt="Little Snitch asking whether Fetch My Recordings can accept an incoming connection from the local network, with the Allow button marked" width="560"/>
-  <br/><em>Little Snitch asking about Fetch My Recordings</em>
-</p>
+In Little Snitch, choose **Only local network** and a lasting option instead of **Once**, then click **Allow**.
 
 ### First open on Windows
 
