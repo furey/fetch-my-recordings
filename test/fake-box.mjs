@@ -12,12 +12,12 @@ export const MB = 1024 * 1024
 
 export const demoShows = ({ size = 3 * MB } = {}) => [
   {
-    title: 'Harbour Lights',
+    title: 'Master Cook',
     items: [
-      { title: 'S1 E1 - The Lighthouse Keeper', size, duration: '0:58:12' },
-      { title: 'S1 E2 - Low Tide', size: size + 4096, duration: '0:57:40' },
-      { title: 'S1 E3 - Storm Warning', size: size + 8192, duration: '0:59:03' },
-      { title: 'S1 E4 - Safe Harbour', size: size + 12288, duration: '1:01:27' }
+      { title: 'S1 E1 - Auditions', size, duration: '0:58:12' },
+      { title: 'S1 E2 - Mystery Box', size: size + 4096, duration: '0:57:40' },
+      { title: 'S1 E3 - Team Challenge', size: size + 8192, duration: '0:59:03' },
+      { title: 'S1 E4 - Elimination', size: size + 12288, duration: '1:01:27' }
     ]
   },
   {
@@ -28,19 +28,23 @@ export const demoShows = ({ size = 3 * MB } = {}) => [
     ]
   },
   {
-    title: 'The Night Market',
-    items: [{ title: 'The Night Market', size: size * 3, duration: '1:52:30' }]
+    title: 'Mission Improbable',
+    items: [{ title: 'Mission Improbable', size: size * 3, duration: '1:52:30' }]
   },
   {
-    title: 'Coastal Kitchen',
+    title: 'Jurassic Car Park',
+    items: [{ title: 'Jurassic Car Park', size: size * 2, duration: '2:07:15' }]
+  },
+  {
+    title: 'Bigger Brother',
     items: [
-      { title: 'S2 E5 - Oysters', size: size + 1024, duration: '0:28:45' },
-      { title: 'S2 E6 - Sourdough', size: -1, duration: '0:00:00', stillRecording: true }
+      { title: 'S2 E5 - Day Forty', size: size + 1024, duration: '0:28:45' },
+      { title: 'S2 E6 - Eviction Night', size: -1, duration: '0:00:00', stillRecording: true }
     ]
   },
   {
-    title: 'Morning Weather Report',
-    items: [{ title: 'Morning Weather Report', size: Math.round(size / 2), duration: '0:15:00' }]
+    title: 'The Footy Panel',
+    items: [{ title: 'The Footy Panel', size: Math.round(size / 2), duration: '0:58:00' }]
   }
 ]
 
