@@ -19,10 +19,12 @@ export const summariseResults = (described) => {
     total: described.length,
     saved: count(['saved']),
     alreadySaved: count(['already_saved']),
-    notSaved: count(['failed', 'locked', 'still_recording']),
+    notSaved: count(NOT_SAVED_STATUSES),
     stopped: count(['cancelled'])
   }
 }
+
+const NOT_SAVED_STATUSES = ['failed', 'locked', 'still_recording']
 
 export const plainReason = (result) => {
   const text = `${result.error ?? ''} ${result.warning ?? ''}`
@@ -55,10 +57,17 @@ const runSave = async ({ recordings, folder, forPlex, retryDelays, onProgress, o
     onProgress,
     onResult: (result) => {
       const entry = describeResult(result)
+      if (NOT_SAVED_STATUSES.includes(entry.status)) logNotSaved(result)
       described.push(entry)
       onResult(entry)
     },
     signal
   })
   return { summary: summariseResults(described), results: described }
+}
+
+const logNotSaved = (result) => {
+  const attempts = result.attempts ?? 1
+  const detail = result.error ?? result.warning ?? 'no reason given'
+  console.error(`Not saved: ${result.item.title} (${result.status} after ${attempts} attempts): ${detail}`)
 }
