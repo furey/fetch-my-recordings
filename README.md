@@ -4,7 +4,7 @@ Fetch My Recordings is a free desktop app for Mac, Windows, and Linux that copie
 
 Prefer a terminal, a NAS, or Docker? See [Related projects](#related-projects).
 
-<https://github.com/user-attachments/assets/092d5692-9651-4589-bddd-f0fc509dda03>
+<https://github.com/user-attachments/assets/49d593ee-45a1-4f73-bb15-3de4feb5f739>
 
 > [!NOTE]<br>
 > Fetch's [Gen 3 Extended Service Levy](https://news.fetchtv.com.au/extended-service-levy-1) applies to Mini Gen 3 and Mighty Gen 3 owners from `1 November 2026`. Copy your recordings while the box still lists them: a box whose Fetch account is cancelled lists no recordings. To record free-to-air TV without Fetch, see [Freetvarr](https://github.com/furey/freetvarr).
@@ -194,11 +194,18 @@ The app remembers what it saved from each box. On the **Choose recordings** step
   <br/><em>Choose recordings, with Saved and Moved or deleted episodes</em>
 </p>
 
-When the save ends, the app counts the recordings it saved, the recordings that were already saved, and the recordings it could not save. Click **Open folder** to see the files. The files play in VLC, a free video player, or in a media library app such as Plex, Jellyfin, or Kodi.
+When the save ends, the app counts the recordings it saved, the recordings that were already saved, and the recordings it could not save. Click a count to see the list of those recordings. Click **Open folder** to see the files.
 
 <p align="center">
-  <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/app-all-done.png" alt="The All done screen: 8 saved, 0 already saved, 0 not saved, with Open folder and Save again buttons" width="720"/>
+  <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/app-all-done.png" alt="The All done screen: 9 saved, 0 already saved, 0 not saved, and a card that asks I have my files, but now what?" width="720"/>
   <br/><em>The All done screen</em>
+</p>
+
+Click **How to watch your recordings** to see how to watch the files on this computer or on your TV.
+
+<p align="center">
+  <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/app-how-to-watch.png" alt="The How to watch your recordings dialog on the On your TV tab: a USB drive, an Apple TV, phone or tablet, or Plex, Jellyfin or Kodi" width="720"/>
+  <br/><em>How to watch your recordings</em>
 </p>
 
 If a save stops part way, or some recordings are not saved, click **Save again**. The app skips the recordings that are already in the folder and continues a part-saved recording from where it stopped. The app keeps its list of saved files in a `fetchtv.json` file in the folder, the same file the [`fetchtv` command-line tool](https://github.com/furey/fetchtv) uses. So the app and `fetchtv` can take turns on one folder.
