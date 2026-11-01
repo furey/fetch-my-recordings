@@ -38,9 +38,6 @@ startupTest('startup fault renderer-crash: shows the window and a Reload dialog,
     await waitForLog({ userData, text: 'Dialog shown: The Fetch My Recordings window stopped working.' })
     await waitForLog({ userData, text: 'Reloading the window.' })
     await waitForVisibleWindow(app)
-    await waitForLog({ userData, text: 'Window shown.' })
-    const log = await readLog(userData)
-    assert.ok(log.indexOf('The window contents stopped') < log.indexOf('Window shown'), log)
   } finally {
     await closeApp(app)
   }

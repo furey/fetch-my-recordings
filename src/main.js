@@ -21,6 +21,7 @@ const EXTERNAL_LINKS = {
 }
 const ISSUES_URL = 'https://github.com/furey/fetch-my-recordings/issues'
 const SHOW_FALLBACK_MS = 10000
+const FAULTS_WITHOUT_READY = new Set(['no-ready', 'gpu-crash', 'renderer-crash'])
 const WATCHDOG_MS = 30000
 const ERR_ABORTED = -3
 const distDir = path.dirname(fileURLToPath(import.meta.url))
@@ -135,7 +136,7 @@ const createWindow = () => {
     }
   })
   const fault = activeFault()
-  if (fault !== 'no-ready') window.once('ready-to-show', () => showWhenReady(window))
+  if (!FAULTS_WITHOUT_READY.has(fault)) window.once('ready-to-show', () => showWhenReady(window))
   window.on('close', (event) => confirmCloseDuringSave({ event, window }))
   window.on('session-end', () => forgetStartBeforeShow('Windows is ending the session'))
   window.on('unresponsive', () => handleUnresponsive(window))
@@ -167,6 +168,7 @@ const showIfStillHidden = (window) => {
   revealWindow(window)
   settleStart()
   state.log.write(`The window was not ready after ${SHOW_FALLBACK_MS / 1000} s. Showed it anyway.`)
+  if (window.webContents.isCrashed()) return handleRendererGone({ window, details: { reason: 'found stopped', exitCode: 'unknown' } })
   planNextRung('The window did not draw in time')
 }
 
@@ -394,7 +396,7 @@ const isTestRun = () => process.env.FMR_TEST === '1' && (!app.isPackaged || Bool
 const activeFault = () => isTestRun() ? process.env.FMR_FAULT ?? '' : ''
 
 const injectFault = ({ window, fault }) => {
-  if (fault === 'renderer-crash') window.webContents.once('did-navigate', () => window.webContents.forcefullyCrashRenderer())
+  if (fault === 'renderer-crash') window.webContents.once('dom-ready', () => window.webContents.forcefullyCrashRenderer())
   if (fault === 'gpu-crash') window.webContents.once('dom-ready', () => window.webContents.loadURL('chrome://gpucrash').catch(() => null))
 }
 
