@@ -71,7 +71,7 @@ test('first run: no box found, type the address, choose episodes, save in the de
     await capture({ app, page, name: '3-folder' })
 
     await page.getByRole('button', { name: 'Save', exact: true }).click()
-    await page.getByRole('heading', { name: 'All done' }).waitFor({ timeout: 60000 })
+    await waitForFinish({ page, heading: 'All done', timeout: 60000 })
     await capture({ app, page, name: '4-finished' })
     assert.deepEqual(await totals(page), { 'Saved': '9', 'Already saved': '0', 'Not saved': '0' })
 
@@ -120,7 +120,7 @@ test('next run: remembers the box and folder, saves in the Plex layout, then ski
     assert.equal(await infoButton.evaluate(button => document.activeElement === button), true)
     await capture({ app, page, name: '3-folder-plex' })
     await page.getByRole('button', { name: 'Save', exact: true }).click()
-    await page.getByRole('heading', { name: 'All done' }).waitFor({ timeout: 60000 })
+    await waitForFinish({ page, heading: 'All done', timeout: 60000 })
 
     const files = await listFiles(saveFolder)
     for (const file of [
@@ -131,7 +131,7 @@ test('next run: remembers the box and folder, saves in the Plex layout, then ski
     ]) assert.ok(files.includes(file), `${file} missing from ${files.join(', ')}`)
 
     await page.getByRole('button', { name: 'Save again' }).click()
-    await page.getByRole('heading', { name: 'All done' }).waitFor({ timeout: 60000 })
+    await waitForFinish({ page, heading: 'All done', timeout: 60000 })
     assert.deepEqual(await totals(page), { 'Saved': '0', 'Already saved': '10', 'Not saved': '0' })
 
     await page.getByRole('button', { name: 'Choose other recordings' }).click()
@@ -175,7 +175,7 @@ test('stop part way, then save again carries on from the partial file', async ()
 
     const before = box.requests.length
     await page.getByRole('button', { name: 'Save again' }).click()
-    await page.getByRole('heading', { name: 'All done' }).waitFor({ timeout: 60000 })
+    await waitForFinish({ page, heading: 'All done', timeout: 60000 })
     const resumed = box.requests.slice(before).filter(request => request.range && request.range !== 'bytes=0-')
     assert.ok(resumed.length > 0, 'the second save did not resume with a Range request')
     await assertSameBytes({ box, folder: saveFolder, file: 'Master Cook/S1 E1 - Auditions.ts', title: 'S1 E1 - Auditions' })
@@ -248,7 +248,7 @@ test('saved recordings: still there is unticked, moved or deleted is ticked with
     await masterCook.getByLabel('S1 E2 - Mystery Box').check()
     await page.getByRole('button', { name: 'Next' }).click()
     await page.getByRole('button', { name: 'Save', exact: true }).click()
-    await page.getByRole('heading', { name: 'All done' }).waitFor({ timeout: 60000 })
+    await waitForFinish({ page, heading: 'All done', timeout: 60000 })
   } finally {
     await first.close()
   }
@@ -342,7 +342,7 @@ test('after a save: the card opens How to watch your recordings with three tabs 
     await page.getByRole('heading', { name: 'Choose recordings' }).waitFor()
     await page.getByRole('button', { name: 'Next' }).click()
     await page.getByRole('button', { name: 'Save', exact: true }).click()
-    await page.getByRole('heading', { name: 'All done' }).waitFor({ timeout: 60000 })
+    await waitForFinish({ page, heading: 'All done', timeout: 60000 })
     await page.locator('#what-now-card').getByRole('heading', { name: 'I have my files, but now what?' }).waitFor()
     await page.getByRole('button', { name: 'How to watch your recordings' }).click()
     const dialog = page.locator('#info-dialog')
@@ -462,6 +462,15 @@ const captureAtSize = async ({ app, page, name, width, height }) => {
   await app.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0].setContentSize(size.width, size.height), { width, height })
   await capture({ app, page, name })
   await app.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0].setContentSize(size[0], size[1]), original)
+}
+
+const waitForFinish = async ({ page, heading, timeout }) => {
+  try {
+    await page.getByRole('heading', { name: heading }).waitFor({ timeout })
+  } catch (error) {
+    const screen = await page.locator('main').innerText().catch(() => '(no screen text)')
+    throw new Error(`"${heading}" did not appear within ${timeout} ms. The screen showed:\n${screen}`, { cause: error })
+  }
 }
 
 const stubFolderPicker = ({ app, folder }) => app.evaluate(({ dialog }, chosen) => {

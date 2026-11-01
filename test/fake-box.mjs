@@ -195,7 +195,12 @@ const sendRecording = ({ req, res, item, quirks, attempt, bytesPerSecond }) => {
   if (req.method === 'HEAD') return res.end()
   const dropAt = quirks.alwaysDropAt || (attempt === 1 ? quirks.dropFirstAttemptAt : 0)
   const end = dropAt > from ? Math.min(dropAt, item.actualSize) : item.actualSize
-  streamBytes({ res, item, from, end, bytesPerSecond, finish: () => (end < item.actualSize || quirks.resetAtEnd ? res.socket?.destroy() : res.end()) })
+  streamBytes({ res, item, from, end, bytesPerSecond, finish: () => (end < item.actualSize || quirks.resetAtEnd ? resetConnection(res) : res.end()) })
+}
+
+const resetConnection = (res) => {
+  if (res.socket) res.socket.destroy()
+  else res.destroy()
 }
 
 const streamBytes = ({ res, item, from, end, bytesPerSecond, finish }) => {
