@@ -52,6 +52,41 @@ jobs:
       - name: Build
         run: npm run dist -- --${{ matrix.platform }}
 
+      - name: Add an orphaned package SID to the unpacked app folder (electron/electron#51761)
+        if: runner.os == 'Windows'
+        run: icacls "release\win-unpacked" /grant "*S-1-15-2-999-999-999:(OI)(CI)(F)"
+
+      - name: Test that the unpacked app crashes without the grant and opens a window with it
+        if: runner.os == 'Windows'
+        env:
+          FMR_E2E_ACL_REPRO: '1'
+          FMR_E2E_ACL_EXPECT_CRASH: '1'
+          FETCHTV_E2E_EXECUTABLE: ${{ github.workspace }}\release\win-unpacked\Fetch My Recordings.exe
+        run: node --test --test-concurrency=1 --test-reporter=spec --test-name-pattern="ACL repro" test/startup.test.mjs
+
+      - name: Add an inherited orphaned package SID to the per-user Programs folder
+        if: runner.os == 'Windows'
+        run: |
+          New-Item -ItemType Directory -Force "$env:LOCALAPPDATA\Programs" | Out-Null
+          icacls "$env:LOCALAPPDATA\Programs" /grant "*S-1-15-2-999-999-998:(OI)(CI)(F)"
+
+      - name: Install silently and check the install folder access
+        if: runner.os == 'Windows'
+        run: |
+          Start-Process -Wait -FilePath "release\Fetch-My-Recordings-Windows.exe" -ArgumentList '/S'
+          $installDir = "$env:LOCALAPPDATA\Programs\fetch-my-recordings"
+          icacls $installDir
+          if (-not ((icacls $installDir) -match 'S-1-15-2-1:|ALL APPLICATION PACKAGES')) { throw 'The installer did not grant ALL APPLICATION PACKAGES read access.' }
+          "FMR_INSTALLED_EXE=$installDir\Fetch My Recordings.exe" >> $env:GITHUB_ENV
+
+      - name: Test that the installed app opens a window
+        if: runner.os == 'Windows'
+        env:
+          FMR_E2E_ACL_REPRO: '1'
+        run: |
+          $env:FETCHTV_E2E_EXECUTABLE = $env:FMR_INSTALLED_EXE
+          node --test --test-concurrency=1 --test-reporter=spec --test-name-pattern="ACL repro" test/startup.test.mjs
+
       - name: Upload the build
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
