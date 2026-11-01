@@ -597,7 +597,7 @@ const saveRow = (episode) => {
   return h('li', { className: 'row save-row', 'data-episode': episode.id },
     h('div', { className: 'row-main' },
       h('span', { className: 'row-text' },
-        h('span', { className: 'row-title' }, `${show?.title ?? ''} · ${episode.title}`),
+        h('span', { className: 'row-title' }, recordingName({ show, episode })),
         bar),
       status))
 }
@@ -666,20 +666,14 @@ const finishedScreen = () => {
   if (!summary) return saveErrorScreen()
   const remaining = summary.notSaved + summary.stopped
   const title = summary.stopped > 0 ? 'Stopped' : remaining > 0 ? 'Some not saved' : 'All done'
-  const problemRows = state.save.order.filter(episode => ['failed', 'locked', 'still_recording', 'cancelled'].includes(state.save.rows.get(episode.id)?.status))
   return {
     content: [
       headingWithInfo({ text: title, info: finishedInfo }),
-      h('dl', { className: 'stats', id: 'save-totals' },
-        stat({ label: 'Saved', value: summary.saved, tone: 'is-good' }),
-        stat({ label: 'Already saved', value: summary.alreadySaved }),
-        stat({ label: 'Not saved', value: summary.notSaved, tone: summary.notSaved > 0 ? 'is-bad' : '' }),
-        summary.stopped > 0 ? stat({ label: 'Stopped', value: summary.stopped }) : null),
-      problemRows.length > 0
-        ? h('section', { className: 'finished-section', 'aria-labelledby': 'problem-heading' },
-          h('h2', { id: 'problem-heading' }, 'Not saved'),
-          h('ul', { className: 'table', id: 'problem-list' }, ...problemRows.map(episode => problemRow(episode))))
-        : null,
+      h('div', { className: 'stats', id: 'save-totals' },
+        stat({ label: 'Saved', value: summary.saved, tone: 'is-good', list: 'saved' }),
+        stat({ label: 'Already saved', value: summary.alreadySaved, list: 'already' }),
+        stat({ label: 'Not saved', value: summary.notSaved, tone: summary.notSaved > 0 ? 'is-bad' : '', list: 'not-saved' }),
+        summary.stopped > 0 ? stat({ label: 'Stopped', value: summary.stopped, list: 'stopped' }) : null),
       summary.saved + summary.alreadySaved > 0
         ? h('section', { className: 'finished-section' }, whatNowCard())
         : null
@@ -745,6 +739,11 @@ const whatNowInfo = () => {
   const show = (id) => {
     buttons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.section === id)))
     panel.replaceChildren(...whatNowSection(id))
+    const bodyElement = document.getElementById('info-body')
+    if (bodyElement) {
+      bodyElement.scrollTop = 0
+      updateScrollableBody()
+    }
   }
   show('computer')
   openInfo({
@@ -770,7 +769,55 @@ const finishedInfo = () => openInfo({
   ]
 })
 
-const stat = ({ label, value, tone = '' }) => h('div', { className: `stat ${tone}` }, h('dt', {}, label), h('dd', {}, String(value)))
+const RESULT_LISTS = {
+  saved: { title: 'Saved recordings', statuses: ['saved'] },
+  already: { title: 'Already saved', statuses: ['already_saved'] },
+  'not-saved': { title: 'Not saved', statuses: ['failed', 'locked', 'still_recording'] },
+  stopped: { title: 'Stopped', statuses: ['cancelled'] }
+}
+
+const stat = ({ label, value, tone = '', list }) => {
+  const parts = [h('span', { className: 'stat-label' }, label), h('span', { className: 'stat-value' }, String(value))]
+  if (value === 0) return h('div', { className: `stat ${tone}`, 'data-list': list }, ...parts)
+  return h('button', {
+    type: 'button',
+    className: `stat is-clickable ${tone}`,
+    'data-list': list,
+    'aria-label': `${label}: ${value}. Show list`,
+    onclick: () => openResultList(list)
+  }, ...parts, h('span', { className: 'stat-more' }, 'Show list'))
+}
+
+const resultEpisodes = (list) => state.save.order.filter(episode => RESULT_LISTS[list].statuses.includes(state.save.rows.get(episode.id)?.status))
+
+const openResultList = (list) => {
+  const episodes = resultEpisodes(list)
+  const explained = list === 'not-saved' || list === 'stopped'
+  const body = [
+    list === 'saved' || list === 'already'
+      ? h('p', { className: 'meta', id: 'result-folder' }, 'In ', h('strong', {}, lastParts(state.folder, 1)))
+      : null,
+    h('ul', { className: 'table', id: `result-list-${list}` }, ...episodes.map(episode => explained ? problemRow(episode) : resultRow(episode)))
+  ]
+  const footer = explained
+    ? [h('button', { type: 'button', className: 'btn primary', id: 'dialog-save-again', onclick: saveAgainFromDialog }, 'Save again')]
+    : []
+  openInfo({ title: RESULT_LISTS[list].title, body, footer })
+}
+
+const recordingName = ({ show, episode }) => (!show || show.title === episode.title ? episode.title : `${show.title} · ${episode.title}`)
+
+const resultRow = (episode) => {
+  const show = state.shows.find(item => item.episodes.includes(episode))
+  return h('li', { className: 'row' },
+    h('div', { className: 'row-main is-plain' },
+      h('span', { className: 'row-text' }, h('span', { className: 'row-title' }, recordingName({ show, episode })))))
+}
+
+const saveAgainFromDialog = () => {
+  document.getElementById('info-dialog').close()
+  beginSave()
+}
 
 const saveErrorScreen = () => ({
   content: [
@@ -790,7 +837,7 @@ const problemRow = (episode) => {
   const reveal = h('span', { className: 'row-reveal is-always' }, 'Why')
   const main = h('div', { className: 'row-main is-clickable', role: 'button', tabindex: '0', 'aria-expanded': 'false' },
     h('span', { className: 'row-text' },
-      h('span', { className: 'row-title' }, `${show?.title ?? ''} · ${episode.title}`),
+      h('span', { className: 'row-title' }, recordingName({ show, episode })),
       statusLabel(row) === 'Not saved' ? null : h('span', { className: 'row-detail' }, statusLabel(row))),
     h('span', { className: 'row-side' }, reveal))
   const toggle = () => {
@@ -830,19 +877,32 @@ const infoButton = ({ label, onclick }) => h('button', { type: 'button', classNa
 
 const setUpDialog = () => {
   const dialog = document.getElementById('info-dialog')
+  window.addEventListener('resize', () => { if (dialog.open) updateScrollableBody() })
   dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close() })
   document.getElementById('info-close').addEventListener('click', () => dialog.close())
 }
 
-const openInfo = ({ title, body, variant = '' }) => {
+const openInfo = ({ title, body, footer = [], variant = '' }) => {
   const dialog = document.getElementById('info-dialog')
   const opener = document.activeElement
+  const bodyElement = document.getElementById('info-body')
+  const footElement = document.getElementById('info-foot')
   dialog.className = `dialog${variant ? ` is-${variant}` : ''}`
   document.getElementById('info-title').textContent = title
-  document.getElementById('info-body').replaceChildren(...body.filter(Boolean))
+  bodyElement.replaceChildren(...body.filter(Boolean))
+  footElement.replaceChildren(...footer.filter(Boolean))
+  footElement.hidden = footer.filter(Boolean).length === 0
   dialog.addEventListener('close', () => opener?.focus?.(), { once: true })
   dialog.showModal()
+  bodyElement.scrollTop = 0
+  updateScrollableBody()
   document.getElementById('info-close').focus()
+}
+
+const updateScrollableBody = () => {
+  const bodyElement = document.getElementById('info-body')
+  if (bodyElement.scrollHeight > bodyElement.clientHeight + 1) bodyElement.setAttribute('tabindex', '0')
+  else bodyElement.removeAttribute('tabindex')
 }
 
 const showScreen = (step, screen) => {

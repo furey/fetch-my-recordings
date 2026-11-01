@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { _electron as electron } from 'playwright-core'
-import { MB, demoShows, recordingBytes, startFakeBox } from './fake-box.mjs'
+import { MB, bigLibrary, demoShows, recordingBytes, startFakeBox } from './fake-box.mjs'
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const screenshotDir = process.env.FETCHTV_SCREENSHOTS_DIR
@@ -133,6 +133,10 @@ test('next run: remembers the box and folder, saves in the Plex layout, then ski
     await page.getByRole('button', { name: 'Save again' }).click()
     await waitForFinish({ page, heading: 'All done', timeout: 60000 })
     assert.deepEqual(await totals(page), { 'Saved': '0', 'Already saved': '10', 'Not saved': '0' })
+    await page.locator('.stat[data-list="already"]').click()
+    await page.locator('#info-dialog').getByRole('heading', { name: 'Already saved' }).waitFor()
+    assert.equal(await page.locator('#result-list-already .row').count(), 10)
+    await page.keyboard.press('Escape')
 
     await page.getByRole('button', { name: 'Choose other recordings' }).click()
     await page.locator('#saved-summary', { hasText: '0 new · 10 already saved' }).waitFor()
@@ -201,10 +205,23 @@ test('a recording the box keeps cutting off is listed as not saved, with a plain
     await page.getByRole('button', { name: 'Save', exact: true }).click()
     await page.getByRole('heading', { name: 'Some not saved' }).waitFor({ timeout: 60000 })
     assert.deepEqual(await totals(page), { 'Saved': '3', 'Already saved': '0', 'Not saved': '1' })
-    await page.getByRole('heading', { name: 'Not saved', exact: true }).waitFor()
-    await page.locator('#problem-list').getByText('Master Cook · S1 E2 - Mystery Box').waitFor()
-    await page.locator('#problem-list .row-main').first().click()
-    await page.locator('#problem-list').getByText('The copy stopped part way, even after trying again.').waitFor()
+    assert.equal(await page.locator('#problem-list').count(), 0)
+    assert.equal(await page.locator('.stat[data-list="already"]').evaluate(tile => tile.tagName), 'DIV')
+    await page.locator('.stat[data-list="saved"]').click()
+    const dialog = page.locator('#info-dialog')
+    await dialog.getByRole('heading', { name: 'Saved recordings' }).waitFor()
+    await dialog.getByText('Master Cook · S1 E1 - Auditions').waitFor()
+    await page.keyboard.press('Escape')
+    await dialog.waitFor({ state: 'hidden' })
+    await page.locator('.stat[data-list="not-saved"]').focus()
+    await page.keyboard.press('Enter')
+    await dialog.getByRole('heading', { name: 'Not saved' }).waitFor()
+    await dialog.getByText('Master Cook · S1 E2 - Mystery Box').waitFor()
+    await dialog.locator('.problem-row .row-main').first().click()
+    await dialog.getByText('The copy stopped part way, even after trying again.').waitFor()
+    await dialog.getByRole('button', { name: 'Save again' }).click()
+    await page.getByRole('heading', { name: 'Saving', exact: true }).waitFor()
+    await page.getByRole('heading', { name: 'Some not saved' }).waitFor({ timeout: 60000 })
     await capture({ app, page, name: '4-finished-not-saved' })
   } finally {
     await app.close()
@@ -364,6 +381,58 @@ test('after a save: the card opens How to watch your recordings with three tabs 
   }
 })
 
+test('long result lists scroll inside the dialog, keep the title and Save again in view, and leave the page still', async () => {
+  const box = await startFakeBox({ shows: bigLibrary() })
+  const userData = await freshDir('user-data-long')
+  const saveFolder = await freshDir('long')
+  await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify({ lastAddress: box.address, lastFolder: saveFolder }))
+  const app = await launchApp({ userData })
+  try {
+    const page = await openApp(app)
+    await page.getByRole('heading', { name: 'Choose recordings' }).waitFor({ timeout: 30000 })
+    await page.getByRole('button', { name: 'Next' }).click()
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await waitForFinish({ page, heading: 'Some not saved', timeout: 170000 })
+    const mainTop = await page.locator('main').evaluate(element => element.scrollTop)
+    const body = page.locator('#info-body')
+    const inView = (selector) => page.evaluate((target) => {
+      const element = document.querySelector(target)
+      const box = element.getBoundingClientRect()
+      return box.top >= 0 && box.bottom <= window.innerHeight
+    }, selector)
+    const lastRowVisible = () => page.evaluate(() => {
+      const body = document.getElementById('info-body')
+      const last = body.querySelector('.row:last-child').getBoundingClientRect()
+      return last.bottom <= body.getBoundingClientRect().bottom
+    })
+    for (const list of ['saved', 'not-saved']) {
+      await page.locator(`.stat[data-list="${list}"]`).click()
+      assert.equal(await body.evaluate(element => element.scrollTop), 0)
+      assert.ok(await body.evaluate(element => element.scrollHeight > element.clientHeight), `${list} list does not scroll`)
+      const bodyBox = await body.boundingBox()
+      await page.mouse.move(bodyBox.x + bodyBox.width / 2, bodyBox.y + bodyBox.height / 2)
+      await page.mouse.wheel(0, 100000)
+      await page.waitForFunction(() => {
+        const element = document.getElementById('info-body')
+        return Math.abs(element.scrollHeight - element.clientHeight - element.scrollTop) < 2
+      })
+      assert.equal(await lastRowVisible(), true)
+      assert.equal(await inView('#info-title'), true)
+      assert.equal(await inView('#info-close'), true)
+      if (list === 'not-saved') assert.equal(await inView('#dialog-save-again'), true)
+      assert.equal(await page.evaluate(() => document.getElementById('info-dialog').scrollTop), 0)
+      await page.keyboard.press('Escape')
+      await page.locator('#info-dialog').waitFor({ state: 'hidden' })
+      assert.equal(await page.locator('main').evaluate(element => element.scrollTop), mainTop)
+    }
+    await page.locator('.stat[data-list="saved"]').click()
+    assert.equal(await body.evaluate(element => element.scrollTop), 0)
+  } finally {
+    await app.close()
+    await box.stop()
+  }
+})
+
 test('the window is locked down: isolated, sandboxed, no Node in the page, strict CSP', async () => {
   const box = await startFakeBox()
   const userData = await freshDir('user-data-security')
@@ -485,11 +554,9 @@ const capture = async ({ app, page, name }) => {
   await page.screenshot({ path: path.join(screenshotDir, `${name}.png`) })
 }
 
-const totals = (page) => page.locator('#save-totals').evaluate(list => {
-  const terms = [...list.querySelectorAll('dt')].map(term => term.textContent)
-  const values = [...list.querySelectorAll('dd')].map(value => value.textContent)
-  return Object.fromEntries(terms.map((term, index) => [term, values[index]]))
-})
+const totals = (page) => page.locator('#save-totals').evaluate(list => Object.fromEntries(
+  [...list.querySelectorAll('.stat')].map(tile => [tile.querySelector('.stat-label').textContent, tile.querySelector('.stat-value').textContent])
+))
 
 const assertSameBytes = async ({ box, folder, file, title }) => {
   const item = [...box.catalogue.items.values()].find(entry => entry.title === title)

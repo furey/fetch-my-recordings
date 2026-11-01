@@ -989,12 +989,22 @@ p {
 .stat:first-child { border-radius: var(--radius-card) 0 0 var(--radius-card); }
 .stat:last-child { border-radius: 0 var(--radius-card) var(--radius-card) 0; }
 
-.stat dt {
+.stat {
+  display: block;
+  border: 0;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+}
+
+.stat-label {
+  display: block;
   font-size: 14px;
   color: var(--text-2);
 }
 
-.stat dd {
+.stat-value {
+  display: block;
   margin: 4px 0 0;
   font-family: var(--font-mono);
   font-size: 32px;
@@ -1002,8 +1012,32 @@ p {
   font-weight: 500;
 }
 
-.stat.is-good dd { color: var(--primary); }
-.stat.is-bad dd { color: var(--live-text); }
+.stat-more {
+  display: block;
+  margin-top: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.stat.is-clickable {
+  cursor: pointer;
+  transition: background-color var(--motion) var(--ease);
+}
+
+@media (hover: hover) {
+  .stat.is-clickable:hover { background: var(--surface-2); }
+  .stat.is-clickable:hover .stat-more { color: var(--text-1); }
+}
+
+.stat.is-good .stat-value { color: var(--primary); }
+.stat.is-bad .stat-value { color: var(--live-text); }
+.stat.is-bad .stat-more { color: var(--live-text); }
+
+.row-main.is-plain {
+  cursor: default;
+}
+
 
 .row-side-value {
   display: block;
@@ -1052,8 +1086,10 @@ p {
 }
 
 .dialog {
+  --dialog-max-height: calc(100vh - 48px);
   width: min(560px, calc(100vw - 48px));
-  max-height: calc(100vh - 64px);
+  max-height: var(--dialog-max-height);
+  overflow: hidden;
   padding: 0;
   border: 1px solid var(--hairline);
   border-radius: 16px;
@@ -1066,15 +1102,63 @@ p {
 }
 
 .dialog-inner {
-  padding: 22px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(var(--dialog-max-height) - 2px);
 }
 
 .dialog-head {
   display: flex;
+  flex: none;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 12px;
+  padding: 22px 24px 12px;
+}
+
+.dialog-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px 24px 24px;
+  border-radius: 0 0 16px 16px;
+}
+
+.dialog-body:focus-visible {
+  outline-offset: -3px;
+}
+
+.dialog-foot {
+  flex: none;
+  padding: 14px 24px 20px;
+  border-top: 1px solid var(--hairline);
+}
+
+.dialog-foot[hidden] {
+  display: none;
+}
+
+.dialog-body::-webkit-scrollbar,
+main::-webkit-scrollbar {
+  width: 14px;
+}
+
+.dialog-body::-webkit-scrollbar-track,
+main::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dialog-body::-webkit-scrollbar-thumb,
+main::-webkit-scrollbar-thumb {
+  border: 4px solid transparent;
+  border-radius: 7px;
+  background: var(--surface-4) padding-box;
+}
+
+.dialog-body::-webkit-scrollbar-thumb:hover,
+main::-webkit-scrollbar-thumb:hover {
+  background: var(--text-3) padding-box;
 }
 
 .dialog-head h2 {
@@ -1383,6 +1467,7 @@ body.is-hidden .mark.is-animated .mark-chips {
 }
 
 .dialog.is-tabbed {
+  --dialog-max-height: calc(100vh - 96px);
   width: min(660px, calc(100vw - 48px));
   margin-top: 56px;
 }
@@ -1409,6 +1494,14 @@ body.is-hidden .mark.is-animated .mark-chips {
 
 .row-detail, .folder-parent, .box-address, #about-line, .space, .example, .notice, .drawer-text {
   text-wrap: pretty;
+}
+
+@media (hover: hover) {
+  .dialog-body .row-main.is-clickable:hover { background: var(--surface-2); }
+}
+
+.stat-label, .stat-more {
+  text-wrap: balance;
 }
 
 h1, h2, h3, h4, button, label, figcaption, dt, .btn, [role="tab"] {

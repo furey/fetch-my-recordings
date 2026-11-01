@@ -48,6 +48,40 @@ export const demoShows = ({ size = 3 * MB } = {}) => [
   }
 ]
 
+const BIG_LIBRARY_SERIES = [
+  'Master Cook', 'Bigger Brother', 'Backyard Builders', 'Coastal Kitchen', 'Grand Resigns', 'Married at First Fright',
+  'The Amazing Pace', 'Thriver: Bondi Car Park', 'Gardening Austral-ish', 'Better Homes and Sheds', 'The Blockheads',
+  'Australian Idle', 'Soft Quiz', 'Gobblebox', 'Escape to the Outer Suburbs', 'The Great Australian Fake Off',
+  'A Very Long Programme About Restoring Old Caravans in the Middle of Nowhere', 'Blue Sky Thinking', 'The Race to the Fridge',
+  'Dancing With the Stairs', 'Who Wants to Be a Thousandaire', 'Location Location Relocation', 'Selling Mouses Australia',
+  'Kitchen Daydreams at Nan’s', 'Love Peninsula', 'The Choice', 'Fishing Down Under the Bridge', 'Antiques Showroad',
+  'Restoration Garbage', 'Police Tea Break', 'Bondi Pet', 'The Footy Panel', 'The Sports Show', 'Football'
+]
+
+const BIG_LIBRARY_FILMS = ['Mission Improbable', 'Space Wars', 'Jurassic Car Park', 'Lord of the Wings', 'Back to the Futon', 'Raiders of the Lost Car Keys']
+
+const EPISODE_WORDS = ['Auditions', 'Mystery Box', 'Team Challenge', 'Elimination', 'Grand Final', 'Road Trip', 'The Big Reveal', 'Family Week', 'Second Chances', 'Finale']
+
+export const bigLibrary = ({ size = 64 * 1024, failEvery = 23 } = {}) => {
+  let count = 0
+  const nextQuirks = () => (++count % failEvery === 0 ? { alwaysDropAt: Math.round(size / 2) } : undefined)
+  const series = BIG_LIBRARY_SERIES.map((title, index) => {
+    const season = 1 + (index % 9)
+    const episodes = 4 + (index % 6) + (index % 3)
+    return {
+      title,
+      items: Array.from({ length: episodes }, (_, episode) => ({
+        title: `S${season} E${episode + 1} - ${EPISODE_WORDS[(index + episode) % EPISODE_WORDS.length]}${index % 7 === 0 ? ', Part Two of a Much Longer Story Than Expected' : ''}`,
+        size: size + episode * 512,
+        duration: '0:58:00',
+        quirks: nextQuirks()
+      }))
+    }
+  })
+  const films = BIG_LIBRARY_FILMS.map(title => ({ title, items: [{ title, size: size * 2, duration: '1:58:00', quirks: nextQuirks() }] }))
+  return [...series, ...films]
+}
+
 export const startFakeBox = async ({
   shows = demoShows(),
   name = 'Test Fetch Box',
