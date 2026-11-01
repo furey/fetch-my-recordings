@@ -78,7 +78,8 @@ const main = async () => {
     await page.evaluate(() => document.fonts.ready)
     await renderSounds({ page, out })
     await renderCursors({ page, out })
-    const frames = await startScreencast({ page, framesDir })
+    const viewport = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }))
+    const frames = await startScreencast({ page, framesDir, viewport })
     const soundLog = await logSounds(page)
     const recordingStart = Date.now()
     clock.start = recordingStart
@@ -140,15 +141,10 @@ const makeVideo = async ({ timeline, out, mp4, poster }) => {
   const { frames, sounds, recordingEnd } = timeline
   const start = frames[0].time
   const length = (recordingEnd - start) / 1000
-  const listPath = path.join(out, 'frames.txt')
-  const lines = frames.flatMap((frame, index) => {
-    const next = index + 1 < frames.length ? frames[index + 1].time : recordingEnd
-    return [`file '${frame.file}'`, `duration ${((next - frame.time) / 1000).toFixed(4)}`]
-  })
-  await fs.writeFile(listPath, [...lines, `file '${frames.at(-1).file}'`].join('\n') + '\n')
+  const slotsDir = path.join(out, 'slots')
+  await writeSlots({ slotted: toSlots({ frames, start }), slotsDir, slotCount: Math.ceil(length * OUTPUT_FPS) + 1 })
   const scale = OUTPUT_WIDTH / timeline.viewportWidth
-  const commandsPath = path.join(out, 'cursor-commands.txt')
-  await fs.writeFile(commandsPath, cursorCommands({ timeline, start, length, scale }))
+  const track = cursorTrack({ timeline, start, length, scale })
   const soundInputs = sounds.flatMap(sound => ['-i', path.join(out, `${sound.name}.wav`)])
   const firstSound = 3
   const delayed = sounds.map((sound, index) => {
@@ -159,17 +155,19 @@ const makeVideo = async ({ timeline, out, mp4, poster }) => {
     ? `${delayed.join(';')};${sounds.map((_, index) => `[s${index}]`).join('')}amix=inputs=${sounds.length}:normalize=0,apad=whole_dur=${length}[aout]`
     : `anullsrc=r=44100:cl=mono,atrim=duration=${length}[aout]`
   const video = [
-    `[0:v]fps=${OUTPUT_FPS},scale=${OUTPUT_WIDTH}:-2:flags=lanczos,sendcmd=f=${commandsPath}[bg]`,
-    `[bg][1:v]overlay@arrow=x=${OFFSCREEN}:y=${OFFSCREEN}:eval=frame[witharrow]`,
-    `[witharrow][2:v]overlay@hand=x=${OFFSCREEN}:y=${OFFSCREEN}:eval=frame,format=yuv420p[vout]`
+    `[0:v]scale=${OUTPUT_WIDTH}:-2:flags=lanczos[bg]`,
+    `[bg][1:v]overlay=x='${frameExpression(track.map(frame => frame.arrow[0]))}':y='${frameExpression(track.map(frame => frame.arrow[1]))}':eval=frame:format=yuv444[witharrow]`,
+    `[witharrow][2:v]overlay=x='${frameExpression(track.map(frame => frame.hand[0]))}':y='${frameExpression(track.map(frame => frame.hand[1]))}':eval=frame:format=yuv444,format=yuv420p[vout]`
   ].join(';')
+  const filterPath = path.join(out, 'filter.txt')
+  await fs.writeFile(filterPath, `${video};${audio}`)
   execFileSync('ffmpeg', [
     '-loglevel', 'error', '-y',
-    '-f', 'concat', '-safe', '0', '-i', listPath,
+    '-framerate', String(OUTPUT_FPS), '-i', path.join(slotsDir, 's%05d.jpg'),
     '-loop', '1', '-framerate', String(OUTPUT_FPS), '-i', path.join(out, 'cursor-arrow.png'),
     '-loop', '1', '-framerate', String(OUTPUT_FPS), '-i', path.join(out, 'cursor-hand.png'),
     ...soundInputs,
-    '-filter_complex', `${video};${audio}`,
+    '-/filter_complex', filterPath,
     '-map', '[vout]', '-map', '[aout]',
     '-r', String(OUTPUT_FPS),
     '-c:v', 'libx264', '-preset', 'slow', '-crf', '23', '-tune', 'stillimage',
@@ -179,9 +177,39 @@ const makeVideo = async ({ timeline, out, mp4, poster }) => {
   if (poster) execFileSync('ffmpeg', ['-loglevel', 'error', '-y', '-ss', '2.5', '-i', mp4, '-frames:v', '1', poster], { stdio: 'inherit' })
 }
 
+const writeSlots = async ({ slotted, slotsDir, slotCount }) => {
+  await fs.rm(slotsDir, { recursive: true, force: true })
+  await fs.mkdir(slotsDir, { recursive: true })
+  let current = 0
+  for (let slot = 0; slot < slotCount; slot++) {
+    while (current + 1 < slotted.length && slotted[current + 1].slot <= slot) current++
+    await fs.symlink(slotted[current].file, path.join(slotsDir, `s${String(slot).padStart(5, '0')}.jpg`))
+  }
+}
+
+const toSlots = ({ frames, start }) => {
+  const ideal = frames.map(frame => ({ file: frame.file, slot: Math.round(((frame.time - start) * OUTPUT_FPS) / 1000) }))
+  const slotted = []
+  ideal.forEach((frame, index) => {
+    const last = slotted.at(-1)
+    if (!last || frame.slot > last.slot) return slotted.push({ ...frame })
+    const nextSlot = ideal[index + 1]?.slot ?? Infinity
+    const isNextSlotFree = nextSlot > last.slot + 1
+    if (isNextSlotFree) return slotted.push({ file: frame.file, slot: last.slot + 1 })
+    const previousSlot = slotted.at(-2)?.slot ?? -1
+    const isPreviousSlotFree = last.slot - 1 > previousSlot && last.slot > 0
+    if (isPreviousSlotFree) {
+      last.slot -= 1
+      return slotted.push({ file: frame.file, slot: last.slot + 1 })
+    }
+    last.file = frame.file
+  })
+  return slotted
+}
+
 const MIN_SHAPE_FRAMES = 6
 
-const cursorCommands = ({ timeline, start, length, scale }) => {
+const cursorTrack = ({ timeline, start, length, scale }) => {
   const hotspots = timeline.cursorHotspots
   const frameCount = Math.ceil(length * OUTPUT_FPS) + 1
   const placed = Array.from({ length: frameCount }, (_, frame) => {
@@ -190,21 +218,28 @@ const cursorCommands = ({ timeline, start, length, scale }) => {
     if (!position) return null
     return { ...position, shape: shapeOf(shapeAt({ samples: timeline.cursor.samples, time })?.cursor) }
   })
-  const lines = []
-  let previous = ''
-  steadyFrames(placed).forEach((sample, frame) => {
+  return steadyFrames(placed).map((sample) => {
     const place = (name) => {
       if (!sample || sample.shape !== name) return [OFFSCREEN, OFFSCREEN]
       return [Math.round(sample.x * scale - hotspots[name].x), Math.round(sample.y * scale - hotspots[name].y)]
     }
-    const [ax, ay] = place('arrow')
-    const [hx, hy] = place('hand')
-    const command = `overlay@arrow x ${ax}, overlay@arrow y ${ay}, overlay@hand x ${hx}, overlay@hand y ${hy}`
-    if (command === previous) return
-    previous = command
-    lines.push(`${(frame / OUTPUT_FPS).toFixed(4)} ${command};`)
+    return { arrow: place('arrow'), hand: place('hand') }
   })
-  return lines.join('\n') + '\n'
+}
+
+const frameBoundary = (frame) => ((frame - 0.5) / OUTPUT_FPS).toFixed(6)
+
+const frameExpression = (values) => {
+  const runs = []
+  values.forEach((value, frame) => {
+    if (runs.at(-1)?.value !== value) runs.push({ from: frame, value })
+  })
+  const pick = (low, high) => {
+    if (low === high) return String(runs[low].value)
+    const middle = Math.ceil((low + high) / 2)
+    return `if(lt(t,${frameBoundary(runs[middle].from)}),${pick(low, middle - 1)},${pick(middle, high)})`
+  }
+  return pick(0, runs.length - 1)
 }
 
 const steadyFrames = (placed) => {
@@ -414,8 +449,6 @@ const pointerLog = []
 
 const minimumJerk = (t) => t * t * t * (10 - 15 * t + 6 * t * t)
 
-const easeOutCubic = (t) => 1 - (1 - t) ** 3
-
 const humanMove = async ({ page, to }) => {
   const from = { ...pointer }
   const dx = to.x - from.x
@@ -438,7 +471,7 @@ const humanMove = async ({ page, to }) => {
   } })
   if (overshoot < 0.5) return
   await animatePointer({ page, duration: between(100, 150), at: (t) => {
-    const s = easeOutCubic(t)
+    const s = minimumJerk(t)
     return { x: end.x + (to.x - end.x) * s, y: end.y + (to.y - end.y) * s }
   } })
 }
@@ -551,16 +584,17 @@ const renderCursors = async ({ page, out }) => {
   await fs.writeFile(path.join(out, 'cursor-hotspots.json'), JSON.stringify(hotspots))
 }
 
-const startScreencast = async ({ page, framesDir }) => {
+const startScreencast = async ({ page, framesDir, viewport }) => {
   const session = await page.context().newCDPSession(page)
   const frames = []
   session.on('Page.screencastFrame', async ({ data, metadata, sessionId }) => {
+    session.send('Page.screencastFrameAck', { sessionId }).catch(() => null)
     const file = path.join(framesDir, `f${String(frames.length).padStart(5, '0')}.jpg`)
     frames.push({ file, time: metadata.timestamp * 1000 })
     await fs.writeFile(file, Buffer.from(data, 'base64'))
-    await session.send('Page.screencastFrameAck', { sessionId }).catch(() => null)
   })
-  await session.send('Page.startScreencast', { format: 'jpeg', quality: 92, everyNthFrame: 1 })
+  const maxHeight = Math.ceil((viewport.height * OUTPUT_WIDTH) / viewport.width)
+  await session.send('Page.startScreencast', { format: 'jpeg', quality: 92, maxWidth: OUTPUT_WIDTH, maxHeight, everyNthFrame: 1 })
   return {
     stop: async () => {
       await session.send('Page.stopScreencast').catch(() => null)
