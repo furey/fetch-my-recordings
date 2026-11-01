@@ -37,6 +37,8 @@ const DEMO_SHOWS = [
     ]
   },
   { title: 'Mission Improbable', items: [{ title: 'Mission Improbable', size: 311 * MB, duration: '1:52:30' }] },
+  { title: 'Jurassic Car Park', items: [{ title: 'Jurassic Car Park', size: 240 * MB, duration: '2:07:15' }] },
+  { title: 'The Footy Panel', items: [{ title: 'The Footy Panel', size: 120 * MB, duration: '0:58:00' }] },
   {
     title: 'Bigger Brother',
     items: [
