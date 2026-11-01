@@ -87,11 +87,12 @@ const registerIpc = ({ settings, history }) => {
     defaultFolder: defaultSaveFolder()
   }))
 
-  handle('boxes:find', async () => {
+  handle('boxes:find', async ({ wholeNetwork }) => {
     const { lastAddress } = await settings.read()
     const locations = await findBoxes({
       rememberedAddress: lastAddress,
-      searchNetwork: process.env.FETCHTV_DISCOVERY !== 'off'
+      searchNetwork: process.env.FETCHTV_DISCOVERY !== 'off',
+      wholeNetwork: Boolean(wholeNetwork)
     })
     return { boxes: locations.map(rememberBox) }
   })
