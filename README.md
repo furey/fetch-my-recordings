@@ -31,17 +31,20 @@ Fetch My Recordings is an independent, free tool made by a Fetch customer. It is
 
 ## Download
 
-Download the file for your computer. Each link gets the newest version.
+The easiest way to download is the [download page](https://furey.github.io/freetvarr/guide/leaving-fetch#copy-with-the-app), which picks the right file for your computer.
 
-| Computer                                | Download                                                                                                                                                       |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Mac with an Apple chip (M1 or later)    | [`Fetch-My-Recordings-mac-arm64.dmg`](https://github.com/furey/fetch-my-recordings/releases/latest/download/Fetch-My-Recordings-mac-arm64.dmg)                 |
-| Mac with an Intel chip                  | [`Fetch-My-Recordings-mac-x64.dmg`](https://github.com/furey/fetch-my-recordings/releases/latest/download/Fetch-My-Recordings-mac-x64.dmg)                     |
-| Windows PC                              | [`Fetch-My-Recordings-win-x64.exe`](https://github.com/furey/fetch-my-recordings/releases/latest/download/Fetch-My-Recordings-win-x64.exe)                     |
-| Linux computer (Intel or AMD)           | [`Fetch-My-Recordings-linux-x86_64.AppImage`](https://github.com/furey/fetch-my-recordings/releases/latest/download/Fetch-My-Recordings-linux-x86_64.AppImage) |
-| Linux computer (ARM, e.g. Raspberry Pi) | [`Fetch-My-Recordings-linux-arm64.AppImage`](https://github.com/furey/fetch-my-recordings/releases/latest/download/Fetch-My-Recordings-linux-arm64.AppImage)   |
+To download a file yourself, choose your computer below. Each link gets the newest version.
 
-To check which chip a Mac has, open the Apple menu and choose **About This Mac**. A **Chip** line that says Apple M1, M2, M3, or later means an Apple chip. A **Processor** line that says Intel means an Intel chip.
+| Computer                                  | Download                                                                                                                                                 |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mac (any Mac)                             | [`Fetch-My-Recordings-Mac.dmg`](https://github.com/furey/fetch-my-recordings/releases/latest/download/Fetch-My-Recordings-Mac.dmg)                       |
+| Mac with an Apple chip (smaller download) | [`Fetch-My-Recordings-Mac-Apple-Chip.dmg`](https://github.com/furey/fetch-my-recordings/releases/latest/download/Fetch-My-Recordings-Mac-Apple-Chip.dmg) |
+| Mac with an Intel chip (smaller download) | [`Fetch-My-Recordings-Mac-Intel.dmg`](https://github.com/furey/fetch-my-recordings/releases/latest/download/Fetch-My-Recordings-Mac-Intel.dmg)           |
+| Windows PC                                | [`Fetch-My-Recordings-Windows.exe`](https://github.com/furey/fetch-my-recordings/releases/latest/download/Fetch-My-Recordings-Windows.exe)               |
+| Linux                                     | [`Fetch-My-Recordings-Linux.AppImage`](https://github.com/furey/fetch-my-recordings/releases/latest/download/Fetch-My-Recordings-Linux.AppImage)         |
+| Linux on ARM (such as a Raspberry Pi)     | [`Fetch-My-Recordings-Linux-ARM.AppImage`](https://github.com/furey/fetch-my-recordings/releases/latest/download/Fetch-My-Recordings-Linux-ARM.AppImage) |
+
+If you are not sure which Mac you have, download the first Mac file; it works on every Mac. To check the chip, open the Apple menu and choose **About This Mac**. A **Chip** line (Apple M1, M2, or later) means an Apple chip. A **Processor** line that says Intel means an Intel chip.
 
 All versions are on the [releases page](https://github.com/furey/fetch-my-recordings/releases).
 
@@ -159,11 +162,11 @@ If you click **Cancel**, the app cannot search for the box. You can still type t
 5. Close the **Properties** window.
 6. Double-click the file.
 
-To do the same in a terminal, run these commands in the folder with the file:
+To do the same in a terminal, run these commands in the folder with the file. On Linux on ARM, the file is `Fetch-My-Recordings-Linux-ARM.AppImage`.
 
 ```console
-chmod +x Fetch-My-Recordings-linux-x86_64.AppImage
-./Fetch-My-Recordings-linux-x86_64.AppImage
+chmod +x Fetch-My-Recordings-Linux.AppImage
+./Fetch-My-Recordings-Linux.AppImage
 ```
 
 If the app does not open on Ubuntu 22.04 or later, install FUSE, which every AppImage needs:
@@ -250,7 +253,7 @@ To try the app without a Fetch box, run `npm run fake-box` in a second terminal.
 | `npm start`          | Bundles the app and opens it                                                              |
 | `npm test`           | Runs the unit tests and the end-to-end tests, which drive the app against the pretend box |
 | `npm run dist`       | Builds the app for the computer you run it on, into `release`                             |
-| `npm run dist:mac`   | Builds the macOS `.dmg` and `.zip` files (Apple chip and Intel)                           |
+| `npm run dist:mac`   | Builds the macOS `.dmg` files (any Mac, Apple chip, and Intel)                            |
 | `npm run dist:win`   | Builds the Windows installer                                                              |
 | `npm run dist:linux` | Builds the Linux AppImages (`x86_64` and `arm64`)                                         |
 
@@ -270,7 +273,16 @@ Add `--executable <path>` to record a built app instead of the source.
 
 [`build.yml`](./.github/workflows/build.yml) runs on a push to `main` or `develop`, a version tag, a pull request, or by hand. On macOS, Windows, and Ubuntu runners it runs `npm test` (under `xvfb` on Ubuntu) and builds the app with `electron-builder`. The builds are kept as workflow artefacts.
 
-For a pushed version tag (e.g. `1.0.0`), a second job waits up to 30 minutes for the GitHub release of that tag. It then attaches the `.dmg`, `.zip`, `.exe`, and `.AppImage` files to the release. Only that job can write to the repository.
+For a pushed version tag (e.g. `1.0.0`), a second job waits up to 30 minutes for the GitHub release of that tag. It then attaches these files to the release, and no others:
+
+- `Fetch-My-Recordings-Mac.dmg` (any Mac)
+- `Fetch-My-Recordings-Mac-Apple-Chip.dmg`
+- `Fetch-My-Recordings-Mac-Intel.dmg`
+- `Fetch-My-Recordings-Windows.exe`
+- `Fetch-My-Recordings-Linux.AppImage` (`x86_64`)
+- `Fetch-My-Recordings-Linux-ARM.AppImage` (`arm64`)
+
+Only that job can write to the repository.
 
 ## Disclaimer
 
