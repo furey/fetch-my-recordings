@@ -56,10 +56,11 @@ jobs:
         if: runner.os == 'Windows'
         run: icacls "release\win-unpacked" /grant "*S-1-15-2-999-999-999:(OI)(CI)(F)"
 
-      - name: Test that the unpacked app still opens a window
+      - name: Test that the unpacked app crashes without the grant and opens a window with it
         if: runner.os == 'Windows'
         env:
           FMR_E2E_ACL_REPRO: '1'
+          FMR_E2E_ACL_EXPECT_CRASH: '1'
           FETCHTV_E2E_EXECUTABLE: ${{ github.workspace }}\release\win-unpacked\Fetch My Recordings.exe
         run: node --test --test-concurrency=1 --test-reporter=spec --test-name-pattern="ACL repro" test/startup.test.mjs
 

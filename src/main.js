@@ -1,4 +1,5 @@
 import { app, BrowserWindow, Menu, crashReporter, dialog, ipcMain, nativeTheme, powerMonitor, powerSaveBlocker, session, shell } from 'electron'
+import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -21,6 +22,7 @@ const EXTERNAL_LINKS = {
 }
 const ISSUES_URL = 'https://github.com/furey/fetch-my-recordings/issues'
 const SHOW_FALLBACK_MS = 10000
+const CHROMIUM_LOG_MAX_BYTES = 2 * 1024 * 1024
 const FAULTS_WITHOUT_READY = new Set(['no-ready', 'gpu-crash', 'renderer-crash'])
 const WATCHDOG_MS = 30000
 const ERR_ABORTED = -3
@@ -73,6 +75,7 @@ const main = () => {
     return app.quit()
   }
   crashReporter.start({ uploadToServer: false })
+  keepChromiumLog()
   state.log.write(`Starting version ${APP_VERSION} on ${process.platform} ${process.arch} (${os.release()}), Electron ${process.versions.electron}.`)
   prepareGpuFallback()
   startWatchdog()
@@ -246,32 +249,45 @@ const prepareGpuFallback = () => {
   const { rung, failedStarts, atLastRung } = state.launchGuard.begin()
   state.gpuRung = rung
   if (failedStarts > 0) state.log.write(`The last ${failedStarts} start(s) closed before the window showed.`)
-  repairInstallFolderAccess({ force: failedStarts > 0 })
+  repairInstallFolderAccess()
   if (failedStarts >= 2 || (failedStarts > 0 && atLastRung)) warnRepeatedFailedStarts(failedStarts)
   if (rung === 0) return
   state.log.write(`Using graphics fallback ${rung} (${GPU_FALLBACKS[rung].name}), kept from an earlier start.`)
   GPU_FALLBACKS[rung].apply()
 }
 
-const repairInstallFolderAccess = ({ force }) => {
+const repairInstallFolderAccess = () => {
   if (process.platform !== 'win32' || !app.isPackaged) return
-  const result = grantSandboxReadAccess({
-    folder: path.dirname(process.execPath),
-    markerPath: path.join(app.getPath('userData'), 'install-access.json'),
-    version: APP_VERSION,
-    force
-  })
-  if (result.skipped) return
+  if (isTestRun() && process.env.FMR_TEST_SKIP_INSTALL_ACCESS === '1') return state.log.write('Test switch: skipped the install folder access grant.')
+  const result = grantSandboxReadAccess(path.dirname(process.execPath))
   state.log.write(result.ok
     ? 'Gave sandboxed processes read access to the install folder (ALL APPLICATION PACKAGES).'
     : `Could not give sandboxed processes read access to the install folder: ${result.error}`)
+}
+
+const keepChromiumLog = () => {
+  if (process.platform !== 'win32') return
+  const logFile = path.join(state.log.folder, 'chromium.log')
+  rotateIfLarge({ filePath: logFile, maxBytes: CHROMIUM_LOG_MAX_BYTES })
+  app.commandLine.appendSwitch('enable-logging', 'file')
+  app.commandLine.appendSwitch('log-file', logFile)
+}
+
+const rotateIfLarge = ({ filePath, maxBytes }) => {
+  try {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true })
+    if (fs.statSync(filePath).size > maxBytes) fs.renameSync(filePath, filePath.replace(/\.log$/, '.old.log'))
+  } catch {
+    return false
+  }
+  return true
 }
 
 const warnRepeatedFailedStarts = (failedStarts) => {
   state.log.write('Showing an error box: the window has not opened for several starts.')
   showErrorBox({
     title: 'Fetch My Recordings could not open its window',
-    content: `The app closed before its window opened the last ${failedStarts} times. It tries again now with its safest settings.\n\nIf no window opens, report it at ${ISSUES_URL} and attach the log file:\n${state.log.filePath}`
+    content: `The app closed before its window opened the last ${failedStarts} times. It tries to open again now.\n\nIf no window opens, report it at ${ISSUES_URL} and attach the files in the log folder:\n${state.log.folder}`
   })
 }
 

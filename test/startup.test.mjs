@@ -11,6 +11,8 @@ import { _electron as electron } from 'playwright-core'
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const packagedExecutable = process.env.FETCHTV_E2E_EXECUTABLE
 const aclRepro = Boolean(process.env.FMR_E2E_ACL_REPRO)
+const expectAclCrash = Boolean(process.env.FMR_E2E_ACL_EXPECT_CRASH)
+const ACCESS_CHECK_EXIT_CODE = 0x80000003
 const VISIBLE_WITHIN_MS = 12000
 const TEST_TIMEOUT_MS = 60000
 const STOP_WITHIN_MS = 5000
@@ -179,18 +181,24 @@ startupTest('the log writes the home folder as ~', async () => {
 })
 
 startupTest('windows ACL repro (electron#51761): an orphaned package SID on the app folder still ends in a window', { timeout: 120000, skip: !aclRepro && 'FMR_E2E_ACL_REPRO is not set' }, async () => {
+  if (expectAclCrash) await assertAclCrashWithoutGrant()
   const userData = await freshDir('acl-repro')
-  const outcomes = []
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    const outcome = await launchUntilWindowOrExit(userData)
-    outcomes.push(outcome)
-    if (outcome === 'window') break
-  }
+  const outcome = await launchUntilWindowOrExit({ userData })
   const log = await readLog(userData)
-  console.log(`ACL repro: attempt 1 ${outcomes[0] === 'window' ? 'showed a window' : `failed (${outcomes[0]})`}. Outcomes: ${outcomes.join(', ')}`)
+  console.log(`ACL repro with the grant: attempt 1 ${outcome === 'window' ? 'showed a window' : `failed (${outcome})`}.`)
   console.log(log)
-  assert.equal(outcomes.at(-1), 'window', `Outcomes: ${outcomes.join(', ')}\n${log}`)
+  assert.equal(outcome, 'window', `${outcome}\n${log}`)
 })
+
+const assertAclCrashWithoutGrant = async () => {
+  const userData = await freshDir('acl-repro-no-grant')
+  const outcome = await launchUntilWindowOrExit({ userData, extraEnv: { FMR_TEST_SKIP_INSTALL_ACCESS: '1' } })
+  const chromiumLog = await fs.readFile(path.join(userData, 'logs', 'chromium.log'), 'utf8').catch(() => '(no chromium.log)')
+  const fatalLine = chromiumLog.split('\n').find(line => line.includes('install_dir_access')) ?? '(no install_dir_access line)'
+  console.log(`ACL repro without the grant: ${outcome}. ${fatalLine}`)
+  assert.equal(outcome, `exit ${ACCESS_CHECK_EXIT_CODE}`, `${outcome}\n${await readLog(userData)}\n${chromiumLog}`)
+  assert.match(fatalLine, /Sandboxed processes cannot read/)
+}
 
 const closeApp = async (app) => {
   const child = app.process()
@@ -207,8 +215,8 @@ const assertNextLaunchShowsWindow = async (userData) => {
   }
 }
 
-const launchUntilWindowOrExit = async (userData) => {
-  const child = spawnApp({ userData })
+const launchUntilWindowOrExit = async ({ userData, extraEnv }) => {
+  const child = spawnApp({ userData, extraEnv })
   const exited = new Promise(resolve => child.once('exit', code => resolve(`exit ${code}`)))
   const shown = waitForLog({ userData, text: 'Window shown', from: await logLength(userData) }).then(() => 'window', () => 'timeout')
   const outcome = await Promise.race([exited, shown])
