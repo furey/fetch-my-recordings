@@ -24,7 +24,7 @@
 
 Prefer a terminal, a NAS, or Docker? See [Related projects](#related-projects).
 
-<https://github.com/user-attachments/assets/49d593ee-45a1-4f73-bb15-3de4feb5f739>
+<https://github.com/user-attachments/assets/9ecbf007-1c77-4009-842c-13fce198e09b>
 
 > [!NOTE]<br>
 > Fetch's [Gen 3 Extended Service Levy](https://news.fetchtv.com.au/extended-service-levy-1) applies to Mini Gen 3 and Mighty Gen 3 owners from `1 November 2026`. Copy your recordings while the box still lists them: a box whose Fetch account is cancelled lists no recordings. To record free-to-air TV without Fetch, see [Freetvarr](https://github.com/furey/freetvarr).
@@ -349,6 +349,12 @@ node scripts/record-demo.mjs --out /tmp/demo --mp4 /tmp/demo/demo.mp4 --poster /
 ```
 
 Add `--executable <path>` to record a built app instead of the source.
+
+To check that the video plays at a true 60 fps, with a cursor that moves on every frame and never holds or jumps:
+
+```console
+node scripts/check-frame-timing.mjs --mp4 /tmp/demo/demo.mp4 --out /tmp/demo
+```
 
 ### Build workflow
 
