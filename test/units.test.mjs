@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseBoxAddress, describeBox } from '../src/boxes.js'
+import { parseBoxAddress, describeBox, findBoxes } from '../src/boxes.js'
+import { FETCH_MANUFACTURER_URL, MEDIA_SERVER_TARGET, parseSearchResponse, searchForFetchBoxes } from '../src/discovery.js'
 import { plainReason, summariseResults } from '../src/saving.js'
 
 test('address: accepts an IP address, with or without a port or a URL around it', () => {
@@ -41,3 +42,60 @@ test('summary: counts saved, skipped, not saved, and stopped', () => {
   const statuses = ['saved', 'saved', 'already_saved', 'failed', 'locked', 'still_recording', 'cancelled']
   assert.deepEqual(summariseResults(statuses.map(status => ({ status }))), { total: 7, saved: 2, alreadySaved: 1, notSaved: 3, stopped: 1 })
 })
+
+test('find: a remembered box that answers skips the network search', async () => {
+  const box = { url: 'http://192.168.1.50:49152/MediaServer.xml' }
+  const searches = []
+  const search = async () => { searches.push('search'); return [] }
+  assert.deepEqual(await findBoxes({ rememberedAddress: '192.168.1.50', connect: async () => box, search }), [box])
+  assert.equal(searches.length, 0)
+  assert.deepEqual(await findBoxes({ rememberedAddress: '192.168.1.50', connect: async () => null, search }), [])
+  assert.equal(searches.length, 1)
+  assert.deepEqual(await findBoxes({ rememberedAddress: '192.168.1.50', wholeNetwork: true, connect: async () => box, search }), [box])
+  assert.equal(searches.length, 2)
+})
+
+test('search: keeps only media server answers that give a location', () => {
+  const answer = (st, location = 'http://192.168.1.50:49152/MediaServer.xml') => ['HTTP/1.1 200 OK', `ST: ${st}`, `LOCATION: ${location}`, '', ''].join('\r\n')
+  assert.deepEqual(parseSearchResponse(answer(MEDIA_SERVER_TARGET)), { location: 'http://192.168.1.50:49152/MediaServer.xml', server: '' })
+  assert.equal(parseSearchResponse(answer('urn:dial-multiscreen-org:device:dial:1')), null)
+  assert.equal(parseSearchResponse(answer(MEDIA_SERVER_TARGET, 'not a url')), null)
+  assert.equal(parseSearchResponse('NOTIFY * HTTP/1.1\r\nLOCATION: http://192.168.1.9/x.xml\r\n\r\n'), null)
+})
+
+test('search: reads only the Fetch-shaped answer, stops once a Fetch box answers, and closes its sockets', async () => {
+  const fetchLocation = 'http://192.168.1.50:49152/MediaServer.xml'
+  const otherLocation = 'http://192.168.1.60/dms/device.xml'
+  const harness = fakeNetwork([otherLocation, fetchLocation])
+  const started = Date.now()
+  const found = await searchForFetchBoxes({ timeoutMs: 3000, settleMs: 50, ...harness })
+  assert.deepEqual(found.map(device => device.url), [fetchLocation])
+  assert.deepEqual(harness.read, [fetchLocation])
+  assert.equal(harness.closed(), true)
+  assert.ok(Date.now() - started < 1000)
+})
+
+test('search: with no Fetch-shaped answer, it reads the other media servers when the round ends', async () => {
+  const otherFetch = 'http://192.168.1.70:8200/rootDesc.xml'
+  const harness = fakeNetwork([otherFetch], { fetchUrls: [otherFetch] })
+  const found = await searchForFetchBoxes({ timeoutMs: 100, settleMs: 50, ...harness })
+  assert.deepEqual(found.map(device => device.url), [otherFetch])
+  assert.deepEqual(harness.read, [otherFetch])
+})
+
+const fakeNetwork = (locations, { fetchUrls = locations.filter(location => location.endsWith('/MediaServer.xml')) } = {}) => {
+  const read = []
+  const socket = { isClosed: false, close() { this.isClosed = true } }
+  return {
+    read,
+    closed: () => socket.isClosed,
+    openSockets: async ({ onResponse }) => {
+      locations.forEach(location => onResponse(['HTTP/1.1 200 OK', `ST: ${MEDIA_SERVER_TARGET}`, `LOCATION: ${location}`, '', ''].join('\r\n')))
+      return [socket]
+    },
+    readDevice: async (location) => {
+      read.push(location)
+      return { url: location, manufacturerURL: fetchUrls.includes(location) ? FETCH_MANUFACTURER_URL : 'http://example.com/' }
+    }
+  }
+}

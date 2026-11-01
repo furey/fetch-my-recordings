@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  <a href="https://furey.github.io/freetvarr/guide/leaving-fetch#copy-with-the-app"><strong>Download for your computer →</strong></a>
+  <a href="https://furey.github.io/freetvarr/guide/leaving-fetch#save-via-desktop-app"><strong>Download for your computer →</strong></a>
 </p>
 
 Prefer a terminal, a NAS, or Docker? See [Related projects](#related-projects).
@@ -51,7 +51,7 @@ Fetch My Recordings is an independent, free tool made by a Fetch customer. It is
 
 ## Download
 
-The easiest way to download is the [download page](https://furey.github.io/freetvarr/guide/leaving-fetch#copy-with-the-app), which picks the right file for your computer.
+The easiest way to download is the [download page](https://furey.github.io/freetvarr/guide/leaving-fetch#save-via-desktop-app), which picks the right file for your computer.
 
 To download a file yourself, choose your computer below. Each link gets the newest version.
 
@@ -86,7 +86,61 @@ The app talks only to the Fetch box on your home network. It reads and writes on
 
 ### First open on a Mac
 
-These steps match macOS 15 Sequoia and later, on a Mac with an Apple chip or an Intel chip.
+Your steps depend on your macOS version. To check it, open the Apple menu and choose **About This Mac**. The steps work on a Mac with an Apple chip or an Intel chip.
+
+- [macOS 14 Sonoma and earlier](#mac-macos-14-sonoma-and-earlier)
+- [macOS 15 Sequoia and later](#mac-macos-15-sequoia-and-later)
+- [Firewall apps](#mac-firewall-apps)
+
+#### Mac: macOS 14 Sonoma and earlier
+
+1. Open the `.dmg` file you downloaded.
+2. Drag **Fetch My Recordings** into the **Applications** folder.
+3. Open the **Applications** folder and double-click **Fetch My Recordings**.
+4. A message says the app cannot be opened because Apple cannot check it for malicious software. Click **OK**.
+
+   <p align="center">
+     <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/first-open-mac14-1-cant-open.png" alt="Illustration of the macOS Sonoma message that Fetch My Recordings.app cannot be opened because Apple cannot check it for malicious software, with the OK button marked" width="600"/>
+     <br/><em>Illustration: the first macOS message</em>
+   </p>
+
+5. Open the Apple menu and choose **System Settings**.
+6. Click **Privacy & Security** in the sidebar.
+7. Scroll down to the **Security** section.
+8. Next to the message that "Fetch My Recordings.app" was blocked from use, click **Open Anyway**.
+
+   <p align="center">
+     <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/first-open-mac14-2-open-anyway.png" alt="Illustration of Privacy and Security settings saying Fetch My Recordings.app was blocked from use, with the Open Anyway button marked" width="600"/>
+     <br/><em>Illustration: Open Anyway in Privacy &amp; Security</em>
+   </p>
+
+9. Type your Mac login password when your Mac asks.
+10. Click **Modify Settings**.
+
+   <p align="center">
+     <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/first-open-mac14-3-password.png" alt="Illustration of the Mac password prompt with the Modify Settings button marked" width="600"/>
+     <br/><em>Illustration: the password prompt</em>
+   </p>
+
+ 1. Click **Open** in the message that appears next.
+
+   <p align="center">
+     <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/first-open-mac14-4-open.png" alt="Illustration of the same macOS message with Open, Show in Finder, and Cancel buttons, with the Open button marked" width="600"/>
+     <br/><em>Illustration: the second macOS message</em>
+   </p>
+
+ 1. Wait for the app to open.
+
+The **Open Anyway** button stays for about one hour after you first try to open the app. If it is gone, do steps 3 and 4 again, then continue from step 5.
+
+> [!TIP]<br>
+> There is a shorter way. Hold the Control key and click **Fetch My Recordings** in the **Applications** folder. Choose **Open**, then click **Open** in the message.
+
+When the app first searches for your Fetch box, your Mac can ask whether Fetch My Recordings can find devices on your local network. Click **Allow**. If you clicked **Don't Allow**, open **System Settings** → **Privacy & Security** → **Local Network**, then turn on **Fetch My Recordings**.
+
+You do these steps once. After that, the app opens with a double-click.
+
+#### Mac: macOS 15 Sequoia and later
 
 1. Open the `.dmg` file you downloaded.
 2. Drag **Fetch My Recordings** into the **Applications** folder.
@@ -129,10 +183,15 @@ When the app first searches for your Fetch box, your Mac asks whether Fetch My R
 
 If you clicked **Don't Allow**, open **System Settings** → **Privacy & Security** → **Local Network**, then turn on **Fetch My Recordings**.
 
+If you use a firewall app such as Little Snitch, allow Fetch My Recordings to connect on your local network. If the app found no box while the firewall question was open, click **Search again**.
+
 You do these steps once. After that, the app opens with a double-click.
 
-> [!TIP]<br>
-> On macOS 14 Sonoma or earlier, there is a shorter way. Hold the Control key and click **Fetch My Recordings** in the **Applications** folder. Choose **Open**, then click **Open** in the message.
+#### Mac: Firewall apps
+
+If you use a firewall app such as Little Snitch, it can ask about Fetch My Recordings each time it meets a new device on your network. Allow local network connections for Fetch My Recordings, and choose an option that lasts. Otherwise the firewall asks again for every device, and the app can fail to find your Fetch box.
+
+In Little Snitch, choose **Only local network** and a lasting option instead of **Once**, then click **Allow**.
 
 ### First open on Windows
 
@@ -204,6 +263,8 @@ Click **Start** on the welcome screen. The app then takes you through these step
 2. **Choose recordings**: every recording you have not saved before starts ticked. Click **Show** next to a show to tick or untick single episodes. A recording that is still recording cannot be saved until it ends.
 3. **Choose a folder**: the app shows the free space in the folder and the space the recordings need. Turn on **Names for Plex, Jellyfin or Kodi** if you watch recordings in one of those apps. The files are then saved as `Show/Season 01/Show - S01E02.ts`.
 4. **Save**: the app shows the progress of each recording. Your computer stays awake until the save finishes. Click **Stop** at any time.
+
+To go back, click a finished step at the top of the window. The app keeps your box, your ticks, and your folder. Click the app icon in the top-left corner to go back to the welcome screen. While recordings are saving, the earlier steps are locked, and the app icon asks before it stops the save.
 
 <p align="center">
   <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/app-welcome.png" alt="The Fetch My Recordings welcome screen with the Start button" width="720"/>

@@ -15,7 +15,9 @@ const { values } = parseArgs({
     out: { type: 'string' },
     mp4: { type: 'string' },
     poster: { type: 'string' },
-    address: { type: 'string', default: '192.168.1.50' }
+    address: { type: 'string', default: '192.168.1.50' },
+    take: { type: 'string', default: 'demo' },
+    schedule: { type: 'string' }
   }
 })
 
@@ -58,7 +60,9 @@ const main = async () => {
   const saveFolder = path.join(work, 'Movies', 'Fetch recordings')
   await fs.mkdir(userData, { recursive: true })
   const box = await startFakeBox({ shows: DEMO_SHOWS, name: 'Lounge room box' })
-  await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify({ lastAddress: box.address, lastFolder: saveFolder }))
+  const settings = values.take === 'not-found' ? { lastFolder: saveFolder } : { lastAddress: box.address, lastFolder: saveFolder }
+  await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify(settings))
+  const schedule = values.schedule ? JSON.parse(await fs.readFile(path.resolve(values.schedule), 'utf8')) : {}
   const env = { ...process.env, FETCHTV_USER_DATA: userData, FETCHTV_DISCOVERY: 'off' }
   const app = values.executable
     ? await electron.launch({ executablePath: values.executable, env })
@@ -67,9 +71,7 @@ const main = async () => {
     await app.evaluate(({ shell }) => { shell.openPath = async () => '' })
     const page = await app.firstWindow()
     await page.getByRole('heading', { name: 'Fetch My Recordings' }).waitFor()
-    await page.evaluate((address) => {
-      state.pendingSearch = state.pendingSearch.then(({ boxes }) => ({ boxes: boxes.map(found => ({ ...found, address })) }))
-    }, values.address)
+    await showAddressAs({ page, real: box.address, shown: values.address })
     await installTracker(page)
     await page.mouse.move(pointer.x, pointer.y)
     pointerLog.push({ time: Date.now(), x: pointer.x, y: pointer.y })
@@ -79,8 +81,9 @@ const main = async () => {
     const frames = await startScreencast({ page, framesDir })
     const soundLog = await logSounds(page)
     const recordingStart = Date.now()
+    clock.start = recordingStart
     await page.evaluate(() => document.getAnimations().forEach(animation => { animation.currentTime = 0 }))
-    await drive({ page })
+    await TAKES[values.take]({ page, schedule })
     const sounds = await soundLog()
     const recordingEnd = Date.now()
     const cursor = await page.evaluate(() => window.demoCursor)
@@ -89,6 +92,7 @@ const main = async () => {
     const cursorHotspots = JSON.parse(await fs.readFile(path.join(out, 'cursor-hotspots.json'), 'utf8'))
     const timeline = { recordingStart, recordingEnd, frames: frameList, sounds, cursor, pointerLog, viewportWidth, cursorHotspots }
     await fs.writeFile(path.join(out, 'timeline.json'), JSON.stringify(timeline, null, 2))
+    await writeMarks({ out, firstFrame: frameList[0].time })
     await app.close()
     if (values.mp4) await makeVideo({ timeline, out, mp4: path.resolve(values.mp4), poster: values.poster && path.resolve(values.poster) })
     reportStillness(timeline)
@@ -241,6 +245,101 @@ const reportStillness = ({ frames, recordingEnd, cursor }) => {
   const finalHold = (recordingEnd - changes.at(-1)) / 1000
   console.log(`Length ${((recordingEnd - frames[0].time) / 1000).toFixed(2)} s. Longest still stretch ${longest.seconds.toFixed(2)} s at ${longest.at.toFixed(2)} s. Final hold ${finalHold.toFixed(2)} s.`)
 }
+
+const clock = { start: 0, marks: {} }
+
+const mark = (name) => { clock.marks[name] = Date.now() }
+
+const until = async (page, seconds) => {
+  const wait = clock.start + seconds * 1000 - Date.now()
+  if (wait > 0) await page.waitForTimeout(wait)
+}
+
+const writeMarks = async ({ out, firstFrame }) => {
+  const marks = Object.fromEntries(Object.entries(clock.marks).map(([name, time]) => [name, +((time - firstFrame) / 1000).toFixed(3)]))
+  await fs.writeFile(path.join(out, 'marks.json'), JSON.stringify(marks, null, 2))
+}
+
+const LEAD = 0.55
+
+const clickAt = async ({ page, schedule, name, locator }) => {
+  await until(page, schedule[name] - LEAD)
+  await clickOn({ page, locator })
+  mark(name)
+}
+
+const hoverAt = async ({ page, schedule, name, locator }) => {
+  await until(page, schedule[name] - LEAD)
+  await hoverOver({ page, locator })
+  mark(name)
+}
+
+const driveMain = async ({ page, schedule }) => {
+  mark('welcome')
+  await clickAt({ page, schedule, name: 'start', locator: page.getByRole('button', { name: 'Start', exact: true }) })
+  await humanMove({ page, to: { x: 640, y: 420 } })
+  await page.getByRole('heading', { name: 'Choose recordings' }).waitFor({ timeout: 20000 })
+  mark('recordings')
+  await hoverAt({ page, schedule, name: 'hover-rows', locator: page.locator('li.show-row[data-show="Backyard Builders"] .row-main').first() })
+  await hold(page, 500)
+  await hoverOver({ page, locator: page.locator('li.show-row[data-show="Bigger Brother"] .row-main').first() })
+  await clickAt({ page, schedule, name: 'open-show', locator: page.locator('li.show-row[data-show="Master Cook"] .row-main').first() })
+  await hold(page, 300)
+  await hoverOver({ page, locator: page.locator('.episode-row', { hasText: 'S1 E3' }).locator('.row-main') })
+  await clickAt({ page, schedule, name: 'untick', locator: page.getByLabel('S1 E4 - Elimination') })
+  await clickAt({ page, schedule, name: 'next', locator: page.getByRole('button', { name: 'Next' }) })
+  await page.getByRole('heading', { name: 'Choose a folder' }).waitFor()
+  mark('folder')
+  await hoverAt({ page, schedule, name: 'hover-space', locator: page.locator('#folder-info') })
+  await hoverAt({ page, schedule, name: 'hover-info', locator: page.getByRole('button', { name: 'About names for Plex, Jellyfin or Kodi' }) })
+  await clickAt({ page, schedule, name: 'names-on', locator: page.getByRole('switch', { name: 'Names for Plex, Jellyfin or Kodi' }) })
+  await clickAt({ page, schedule, name: 'save', locator: page.getByRole('button', { name: 'Save', exact: true }) })
+  await hold(page, 300)
+  await humanMove({ page, to: { x: 700, y: 430 } })
+  const done = page.getByRole('heading', { name: 'All done' })
+  const drifts = [{ x: 610, y: 470 }, { x: 660, y: 455 }, { x: 600, y: 485 }, { x: 650, y: 465 }]
+  for (let index = 0; !(await done.isVisible()); index++) {
+    await hold(page, 1000)
+    if (await done.isVisible()) break
+    await humanMove({ page, to: drifts[index % drifts.length] })
+  }
+  mark('done')
+  await hoverAt({ page, schedule, name: 'hover-save-again', locator: page.getByRole('button', { name: 'Save again' }) })
+  await clickAt({ page, schedule, name: 'open-folder', locator: page.getByRole('button', { name: 'Open folder' }) })
+  await clickAt({ page, schedule, name: 'how-to-watch', locator: page.getByRole('button', { name: 'How to watch your recordings' }) })
+  await page.getByRole('heading', { name: 'How to watch your recordings' }).waitFor()
+  await clickAt({ page, schedule, name: 'tv-tab', locator: page.getByRole('button', { name: 'On your TV' }) })
+  await until(page, schedule.end)
+  mark('end')
+}
+
+const driveNotFound = async ({ page, schedule }) => {
+  mark('welcome')
+  await clickAt({ page, schedule, name: 'start', locator: page.getByRole('button', { name: 'Start', exact: true }) })
+  await humanMove({ page, to: { x: 640, y: 420 } })
+  await page.getByRole('heading', { name: 'No Fetch box found' }).waitFor({ timeout: 30000 })
+  mark('not-found')
+  const field = page.getByLabel('Or type its IP address')
+  await clickAt({ page, schedule, name: 'field', locator: field })
+  await until(page, schedule.type)
+  mark('type')
+  for (const character of values.address) {
+    await page.keyboard.type(character)
+    await page.waitForTimeout(Math.round(between(85, 150)))
+  }
+  mark('typed')
+  const connect = page.getByRole('button', { name: 'Connect' })
+  await until(page, schedule.connect - LEAD)
+  await humanMove({ page, to: await targetPoint(connect) })
+  await page.waitForTimeout(Math.round(between(80, 150)))
+  await page.mouse.down()
+  mark('connect')
+  await page.waitForTimeout(Math.round(between(80, 120)))
+  await page.mouse.up()
+  await page.waitForTimeout(500)
+}
+
+const TAKES = { demo: async ({ page }) => drive({ page }), main: driveMain, 'not-found': driveNotFound }
 
 const drive = async ({ page }) => {
   await auditCursors(page, 'welcome')
@@ -482,5 +581,16 @@ const logSounds = async (page) => {
   })
   return () => page.evaluate(() => window.demoSounds)
 }
+
+const showAddressAs = ({ page, real, shown }) => page.evaluate(({ real, shown }) => {
+  const rewrite = (root) => {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+    while (walker.nextNode()) {
+      if (walker.currentNode.nodeValue.includes(real)) walker.currentNode.nodeValue = walker.currentNode.nodeValue.replaceAll(real, shown)
+    }
+  }
+  new MutationObserver(() => rewrite(document.body)).observe(document.body, { subtree: true, childList: true, characterData: true })
+  rewrite(document.body)
+}, { real, shown })
 
 await main()

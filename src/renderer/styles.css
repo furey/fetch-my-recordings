@@ -107,6 +107,8 @@ button, input {
 }
 
 .top {
+  position: relative;
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: 32px;
@@ -170,6 +172,90 @@ body.is-welcome .top {
 .steps li[aria-current="step"] {
   color: var(--text-1);
   font-weight: 700;
+}
+
+.step {
+  display: block;
+  margin: -6px;
+  padding: 6px;
+  border-radius: 8px;
+  transition: background-color var(--motion) var(--ease), color var(--motion) var(--ease);
+}
+
+.step[role="button"] {
+  cursor: pointer;
+}
+
+.step:focus-visible {
+  outline-offset: 0;
+}
+
+@media (hover: hover) {
+  .step[role="button"]:hover {
+    background: var(--surface-2);
+    color: var(--text-1);
+  }
+
+  .step[role="button"]:hover .step-bar {
+    background: var(--primary-hi);
+  }
+}
+
+.home {
+  position: relative;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--primary);
+  cursor: pointer;
+}
+
+.home .mark,
+.home-back {
+  position: absolute;
+  inset: 0;
+  transition: opacity var(--motion) var(--ease);
+}
+
+.home-back {
+  opacity: 0;
+}
+
+.home-tip {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: -6px;
+  z-index: 3;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--surface-3);
+  color: var(--text-1);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 18px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion) var(--ease);
+}
+
+.home:focus-visible .mark {
+  opacity: 0;
+}
+
+.home:focus-visible .home-back,
+.home:focus-visible .home-tip {
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .home:hover .mark { opacity: 0; }
+  .home:hover .home-back,
+  .home:hover .home-tip { opacity: 1; }
 }
 
 main {
