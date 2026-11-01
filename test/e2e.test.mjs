@@ -14,6 +14,7 @@ const skipSsdp = Boolean(process.env.FETCHTV_E2E_SKIP_SSDP)
 const UNREACHABLE_ADDRESS = '192.0.2.1'
 
 let tmpRoot = null
+let notSavedLog = []
 
 before(async () => {
   tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'fetchtv-e2e-'))
@@ -508,6 +509,10 @@ const launchApp = async ({ userData, discovery = false }) => {
   const app = packagedExecutable
     ? await electron.launch({ executablePath: packagedExecutable, env })
     : await electron.launch({ args: [appRoot], cwd: appRoot, env })
+  notSavedLog = []
+  app.process().stderr.on('data', (chunk) => {
+    notSavedLog.push(...String(chunk).split('\n').filter(line => line.startsWith('Not saved: ')))
+  })
   return app
 }
 
@@ -541,7 +546,8 @@ const waitForFinish = async ({ page, heading, timeout }) => {
     await page.getByRole('heading', { name: heading }).waitFor({ timeout })
   } catch (error) {
     const screen = await page.locator('main').innerText().catch(() => '(no screen text)')
-    throw new Error(`"${heading}" did not appear within ${timeout} ms. The screen showed:\n${screen}`, { cause: error })
+    const reasons = notSavedLog.length ? `\nThe app logged:\n${notSavedLog.join('\n')}` : ''
+    throw new Error(`"${heading}" did not appear within ${timeout} ms. The screen showed:\n${screen}${reasons}`, { cause: error })
   }
 }
 

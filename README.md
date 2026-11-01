@@ -1,6 +1,26 @@
-# fetch-my-recordings
+<p align="center">
+  <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/app-icon.png" alt="Fetch My Recordings" width="128"/>
+</p>
 
-Fetch My Recordings is a free desktop app for Mac, Windows, and Linux that copies the recordings on a Fetch TV box to a folder on your computer.
+<h1 align="center">Fetch My Recordings</h1>
+
+<p align="center">
+  <strong>Copy the recordings on your Fetch TV box to your computer.</strong><br/>
+  A free desktop app for Mac, Windows, and Linux. No Fetch account, no terminal.
+</p>
+
+<p align="center">
+  <a href="https://github.com/furey/fetch-my-recordings/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/furey/fetch-my-recordings.svg?style=flat-square&color=5ce1c6&label=release"/></a>
+  <img alt="Downloads" src="https://img.shields.io/github/downloads/furey/fetch-my-recordings/total.svg?style=flat-square&color=3ba4ff"/>
+  <img alt="Mac, Windows, Linux" src="https://img.shields.io/badge/runs%20on-Mac%20%7C%20Windows%20%7C%20Linux-3ba4ff.svg?style=flat-square"/>
+  <img alt="License: GPL-3.0-or-later" src="https://img.shields.io/badge/license-GPL--3.0--or--later-f28c28.svg?style=flat-square"/>
+  <img alt="Home network only" src="https://img.shields.io/badge/network-home%20only-8d9aa7.svg?style=flat-square"/>
+  <img alt="Last commit" src="https://img.shields.io/github/last-commit/furey/fetch-my-recordings.svg?style=flat-square&color=f5c542"/>
+</p>
+
+<p align="center">
+  <a href="https://furey.github.io/freetvarr/guide/leaving-fetch#copy-with-the-app"><strong>Download for your computer →</strong></a>
+</p>
 
 Prefer a terminal, a NAS, or Docker? See [Related projects](#related-projects).
 
