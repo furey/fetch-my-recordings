@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  <a href="https://furey.github.io/freetvarr/guide/leaving-fetch#copy-with-the-app"><strong>Download for your computer →</strong></a>
+  <a href="https://furey.github.io/freetvarr/guide/leaving-fetch#save-via-desktop-app"><strong>Download for your computer →</strong></a>
 </p>
 
 Prefer a terminal, a NAS, or Docker? See [Related projects](#related-projects).
@@ -51,7 +51,7 @@ Fetch My Recordings is an independent, free tool made by a Fetch customer. It is
 
 ## Download
 
-The easiest way to download is the [download page](https://furey.github.io/freetvarr/guide/leaving-fetch#copy-with-the-app), which picks the right file for your computer.
+The easiest way to download is the [download page](https://furey.github.io/freetvarr/guide/leaving-fetch#save-via-desktop-app), which picks the right file for your computer.
 
 To download a file yourself, choose your computer below. Each link gets the newest version.
 
