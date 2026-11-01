@@ -884,7 +884,6 @@ const setUpDialog = () => {
 
 const openInfo = ({ title, body, footer = [], variant = '' }) => {
   const dialog = document.getElementById('info-dialog')
-  const opener = document.activeElement
   const bodyElement = document.getElementById('info-body')
   const footElement = document.getElementById('info-foot')
   dialog.className = `dialog${variant ? ` is-${variant}` : ''}`
@@ -892,7 +891,6 @@ const openInfo = ({ title, body, footer = [], variant = '' }) => {
   bodyElement.replaceChildren(...body.filter(Boolean))
   footElement.replaceChildren(...footer.filter(Boolean))
   footElement.hidden = footer.filter(Boolean).length === 0
-  dialog.addEventListener('close', () => opener?.focus?.(), { once: true })
   dialog.showModal()
   bodyElement.scrollTop = 0
   updateScrollableBody()
