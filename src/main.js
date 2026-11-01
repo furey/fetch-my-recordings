@@ -396,8 +396,14 @@ const isTestRun = () => process.env.FMR_TEST === '1' && (!app.isPackaged || Bool
 const activeFault = () => isTestRun() ? process.env.FMR_FAULT ?? '' : ''
 
 const injectFault = ({ window, fault }) => {
-  if (fault === 'renderer-crash') window.webContents.once('dom-ready', () => window.webContents.forcefullyCrashRenderer())
+  if (fault === 'renderer-crash') window.webContents.once('dom-ready', () => crashRendererForTest(window))
   if (fault === 'gpu-crash') window.webContents.once('dom-ready', () => window.webContents.loadURL('chrome://gpucrash').catch(() => null))
+}
+
+const crashRendererForTest = (window) => {
+  const pid = window.webContents.getOSProcessId()
+  state.log.write(`Test fault: killing the window contents (process ${pid}).`)
+  process.kill(pid, 'SIGKILL')
 }
 
 const registerIpc = ({ settings, history }) => {
