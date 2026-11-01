@@ -597,7 +597,7 @@ const saveRow = (episode) => {
   return h('li', { className: 'row save-row', 'data-episode': episode.id },
     h('div', { className: 'row-main' },
       h('span', { className: 'row-text' },
-        h('span', { className: 'row-title' }, `${show?.title ?? ''}: ${episode.title}`),
+        h('span', { className: 'row-title' }, `${show?.title ?? ''} · ${episode.title}`),
         bar),
       status))
 }
