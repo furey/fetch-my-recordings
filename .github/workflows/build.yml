@@ -57,10 +57,12 @@ jobs:
         with:
           name: fetch-my-recordings-${{ matrix.platform }}
           path: |
-            release/*.dmg
-            release/*.zip
-            release/*.exe
-            release/*.AppImage
+            release/Fetch-My-Recordings-Mac.dmg
+            release/Fetch-My-Recordings-Mac-Apple-Chip.dmg
+            release/Fetch-My-Recordings-Mac-Intel.dmg
+            release/Fetch-My-Recordings-Windows.exe
+            release/Fetch-My-Recordings-Linux.AppImage
+            release/Fetch-My-Recordings-Linux-ARM.AppImage
           if-no-files-found: error
 
   release:
@@ -84,7 +86,14 @@ jobs:
         run: |
           for attempt in $(seq 1 30); do
             if gh release view "$TAG" > /dev/null 2>&1; then
-              gh release upload "$TAG" builds/* --clobber
+              gh release upload "$TAG" \
+                builds/Fetch-My-Recordings-Mac.dmg \
+                builds/Fetch-My-Recordings-Mac-Apple-Chip.dmg \
+                builds/Fetch-My-Recordings-Mac-Intel.dmg \
+                builds/Fetch-My-Recordings-Windows.exe \
+                builds/Fetch-My-Recordings-Linux.AppImage \
+                builds/Fetch-My-Recordings-Linux-ARM.AppImage \
+                --clobber
               exit 0
             fi
             echo "No release for $TAG yet. Waiting a minute (attempt $attempt of 30)."
