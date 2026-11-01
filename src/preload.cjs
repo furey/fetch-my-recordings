@@ -22,5 +22,7 @@ contextBridge.exposeInMainWorld('fetchtv', {
   onSaveResult: subscribe('save:result'),
   openSavedFolder: invoke('folder:open'),
   openProjectPage: invoke('link:project'),
+  openFetchtvPage: invoke('link:fetchtv'),
+  openLink: invoke('link:open'),
   setSound: invoke('settings:sound')
 })

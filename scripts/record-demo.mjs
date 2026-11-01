@@ -21,27 +21,29 @@ const { values } = parseArgs({
 
 const DEMO_SHOWS = [
   {
-    title: 'Harbour Lights',
+    title: 'Master Cook',
     items: [
-      { title: 'S1 E1 - The Lighthouse Keeper', size: 98 * MB, duration: '0:58:12' },
-      { title: 'S1 E2 - Low Tide', size: 99 * MB, duration: '0:57:40' },
-      { title: 'S1 E3 - Storm Warning', size: 96 * MB, duration: '0:59:03' },
-      { title: 'S1 E4 - Safe Harbour', size: 100 * MB, duration: '1:01:27' }
+      { title: 'S1 E1 - Auditions', size: 72 * MB, duration: '0:58:12' },
+      { title: 'S1 E2 - Mystery Box', size: 74 * MB, duration: '0:57:40' },
+      { title: 'S1 E3 - Team Challenge', size: 71 * MB, duration: '0:59:03' },
+      { title: 'S1 E4 - Elimination', size: 75 * MB, duration: '1:01:27' }
     ]
   },
   {
     title: 'Backyard Builders',
     items: [
-      { title: 'S3 E1 - The Shed', size: 115 * MB, duration: '0:44:10' },
-      { title: 'S3 E2 - The Deck', size: 118 * MB, duration: '0:44:55' }
+      { title: 'S3 E1 - The Shed', size: 84 * MB, duration: '0:44:10' },
+      { title: 'S3 E2 - The Deck', size: 86 * MB, duration: '0:44:55' }
     ]
   },
-  { title: 'The Night Market', items: [{ title: 'The Night Market', size: 311 * MB, duration: '1:52:30' }] },
+  { title: 'Mission Improbable', items: [{ title: 'Mission Improbable', size: 190 * MB, duration: '1:52:30' }] },
+  { title: 'Jurassic Car Park', items: [{ title: 'Jurassic Car Park', size: 170 * MB, duration: '2:07:15' }] },
+  { title: 'The Footy Panel', items: [{ title: 'The Footy Panel', size: 88 * MB, duration: '0:58:00' }] },
   {
-    title: 'Coastal Kitchen',
+    title: 'Bigger Brother',
     items: [
-      { title: 'S2 E5 - Oysters', size: 86 * MB, duration: '0:28:45' },
-      { title: 'S2 E6 - Sourdough', size: -1, duration: '0:00:00', stillRecording: true }
+      { title: 'S2 E5 - Day Forty', size: 64 * MB, duration: '0:28:45' },
+      { title: 'S2 E6 - Eviction Night', size: -1, duration: '0:00:00', stillRecording: true }
     ]
   }
 ]
@@ -250,14 +252,14 @@ const drive = async ({ page }) => {
   await hold(page, 1050)
   await hoverOver({ page, locator: page.locator('li.show-row[data-show="Backyard Builders"] .row-main').first() })
   await hold(page, 250)
-  await hoverOver({ page, locator: page.locator('li.show-row[data-show="Coastal Kitchen"] .row-main').first() })
-  await clickOn({ page, locator: page.locator('li.show-row[data-show="Harbour Lights"] .row-main').first() })
+  await hoverOver({ page, locator: page.locator('li.show-row[data-show="Bigger Brother"] .row-main').first() })
+  await clickOn({ page, locator: page.locator('li.show-row[data-show="Master Cook"] .row-main').first() })
   await hold(page, 900)
   for (const title of ['S1 E1', 'S1 E2', 'S1 E3']) {
     await hoverOver({ page, locator: page.locator('.episode-row', { hasText: title }).locator('.row-main') })
     await hold(page, 120)
   }
-  await clickOn({ page, locator: page.getByLabel('S1 E4 - Safe Harbour') })
+  await clickOn({ page, locator: page.getByLabel('S1 E4 - Elimination') })
   await hold(page, 900)
   await clickOn({ page, locator: page.getByRole('button', { name: 'Next' }) })
   await page.getByRole('heading', { name: 'Choose a folder' }).waitFor()
@@ -282,7 +284,7 @@ const drive = async ({ page }) => {
   }
   await auditCursors(page, 'done')
   await hold(page, 800)
-  await hoverOver({ page, locator: page.getByRole('button', { name: 'Open folder' }) })
+  await hoverOver({ page, locator: page.getByRole('button', { name: 'How to watch your recordings' }) })
   await hold(page, 1800)
 }
 

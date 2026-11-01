@@ -170,9 +170,9 @@ const openAbout = () => openInfo({
       h('li', {}, 'Find the Fetch box on your home network'),
       h('li', {}, 'Choose the recordings you want'),
       h('li', {}, 'Choose a folder, then save')),
-    h('p', {}, 'Free and open source, built on the fetchtv command-line tool. It talks only to your Fetch box, on your home network. It needs no Fetch account, and it deletes nothing from the box.'),
+    h('p', {}, 'Free and open source, built on the ', fetchtvLink(), '. It talks only to your Fetch box, on your home network. It needs no Fetch account, and it deletes nothing from the box.'),
     h('p', { id: 'independence' }, 'Fetch My Recordings is an independent, free tool made by a Fetch customer. It is not made, endorsed, or supported by Fetch TV. Fetch is a trademark of its owner.'),
-    h('p', { className: 'meta' }, `Version ${state.info.version}. Licence GPL-3.0-or-later. GitHub mark from GitHub Octicons, MIT licence.`),
+    h('p', { className: 'meta' }, `Version ${state.info.version}. Licence GPL-3.0-or-later. GitHub mark from GitHub Octicons, MIT licence. Figtree and Geist Mono fonts under the SIL Open Font Licence 1.1.`),
     h('p', {}, githubLink())
   ]
 })
@@ -597,7 +597,7 @@ const saveRow = (episode) => {
   return h('li', { className: 'row save-row', 'data-episode': episode.id },
     h('div', { className: 'row-main' },
       h('span', { className: 'row-text' },
-        h('span', { className: 'row-title' }, `${show?.title ?? ''}: ${episode.title}`),
+        h('span', { className: 'row-title' }, recordingName({ show, episode })),
         bar),
       status))
 }
@@ -666,17 +666,16 @@ const finishedScreen = () => {
   if (!summary) return saveErrorScreen()
   const remaining = summary.notSaved + summary.stopped
   const title = summary.stopped > 0 ? 'Stopped' : remaining > 0 ? 'Some not saved' : 'All done'
-  const problemRows = state.save.order.filter(episode => ['failed', 'locked', 'still_recording', 'cancelled'].includes(state.save.rows.get(episode.id)?.status))
   return {
     content: [
       headingWithInfo({ text: title, info: finishedInfo }),
-      h('dl', { className: 'stats', id: 'save-totals' },
-        stat({ label: 'Saved', value: summary.saved, tone: 'is-good' }),
-        stat({ label: 'Already saved', value: summary.alreadySaved }),
-        stat({ label: 'Not saved', value: summary.notSaved, tone: summary.notSaved > 0 ? 'is-bad' : '' }),
-        summary.stopped > 0 ? stat({ label: 'Stopped', value: summary.stopped }) : null),
-      problemRows.length > 0
-        ? h('ul', { className: 'table', id: 'problem-list' }, ...problemRows.map(episode => problemRow(episode)))
+      h('div', { className: 'stats', id: 'save-totals' },
+        stat({ label: 'Saved', value: summary.saved, tone: 'is-good', list: 'saved' }),
+        stat({ label: 'Already saved', value: summary.alreadySaved, list: 'already' }),
+        stat({ label: 'Not saved', value: summary.notSaved, tone: summary.notSaved > 0 ? 'is-bad' : '', list: 'not-saved' }),
+        summary.stopped > 0 ? stat({ label: 'Stopped', value: summary.stopped, list: 'stopped' }) : null),
+      summary.saved + summary.alreadySaved > 0
+        ? h('section', { className: 'finished-section' }, whatNowCard())
         : null
     ],
     actions: [
@@ -688,6 +687,78 @@ const finishedScreen = () => {
   }
 }
 
+const WHAT_NOW_SECTIONS = [
+  { id: 'computer', tab: 'On this computer', heading: 'On this computer' },
+  { id: 'tv', tab: 'On your TV', heading: 'On your TV' },
+  { id: 'record', tab: 'Record free-to-air', heading: 'Record free-to-air TV without Fetch' }
+]
+
+const whatNowSection = (id) => {
+  const section = WHAT_NOW_SECTIONS.find(item => item.id === id)
+  return [
+    illustration(`watch-${id}`),
+    h('h3', {}, section.heading),
+    ...whatNowBody(id)
+  ]
+}
+
+const whatNowBody = (id) => {
+  if (id === 'computer') {
+    return [
+      h('p', {}, 'Open them in VLC, a free video player. QuickTime can’t play most of them.'),
+      h('p', {}, linkButton({ label: 'Download VLC', name: 'vlc' }))
+    ]
+  }
+  if (id === 'tv') {
+    return [h('ul', { className: 'options' },
+      h('li', {}, h('strong', {}, 'USB drive. '), 'Copy the folder to a USB drive for a TV or media player that plays .ts files.'),
+      h('li', {}, h('strong', {}, 'Apple TV, phone or tablet. '), 'Open them in Infuse or VLC from a shared folder.'),
+      h('li', {}, h('strong', {}, 'Plex, Jellyfin or Kodi. '), state.forPlex
+        ? 'Add the folder to your library. The files already have the names these apps need.'
+        : 'Add the folder to your library. These apps need the Plex, Jellyfin or Kodi names. Saving again with them makes a second copy.',
+      state.forPlex ? null : h('p', { className: 'option-action' }, h('button', { type: 'button', className: 'btn', id: 'save-with-plex-names', onclick: saveAgainWithPlexNames }, 'Save again with Plex names'))))]
+  }
+  return [
+    h('p', {}, 'If you have, or are happy to buy, a TV tuner for your aerial (such as an HDHomeRun) and a computer or NAS that stays on, Freetvarr records free-to-air TV into the same kind of library. It’s free, from the same author.'),
+    h('p', {}, linkButton({ label: 'Learn about Freetvarr', name: 'freetvarr' }))
+  ]
+}
+
+const saveAgainWithPlexNames = () => {
+  document.getElementById('info-dialog').close()
+  state.forPlex = true
+  goToFolderStep()
+}
+
+const linkButton = ({ label, name }) => h('button', { type: 'button', className: 'btn', 'data-link': name, onclick: () => api.openLink({ name }) }, label)
+
+const whatNowInfo = () => {
+  const panel = h('div', { className: 'what-now-panel' })
+  const buttons = WHAT_NOW_SECTIONS.map(section => h('button', { type: 'button', className: 'segment what-now-tab', 'data-section': section.id, onclick: () => show(section.id) },
+    lineIcon(section.id), h('span', {}, section.tab)))
+  const show = (id) => {
+    buttons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.section === id)))
+    panel.replaceChildren(...whatNowSection(id))
+    const bodyElement = document.getElementById('info-body')
+    if (bodyElement) {
+      bodyElement.scrollTop = 0
+      updateScrollableBody()
+    }
+  }
+  show('computer')
+  openInfo({
+    title: 'How to watch your recordings',
+    variant: 'tabbed',
+    body: [h('div', { className: 'segmented is-fill', role: 'group', 'aria-label': 'Where to watch' }, ...buttons), panel]
+  })
+}
+
+const whatNowCard = () => h('div', { className: 'what-now-card', id: 'what-now-card' },
+  illustration('watch-card'),
+  h('div', { className: 'what-now-card-text' },
+    h('h2', {}, 'I have my files, but now what?'),
+    h('button', { type: 'button', className: 'btn', id: 'what-now', onclick: whatNowInfo }, 'How to watch your recordings')))
+
 const finishedInfo = () => openInfo({
   title: 'Your recordings',
   body: [
@@ -698,7 +769,55 @@ const finishedInfo = () => openInfo({
   ]
 })
 
-const stat = ({ label, value, tone = '' }) => h('div', { className: `stat ${tone}` }, h('dt', {}, label), h('dd', {}, String(value)))
+const RESULT_LISTS = {
+  saved: { title: 'Saved recordings', statuses: ['saved'] },
+  already: { title: 'Already saved', statuses: ['already_saved'] },
+  'not-saved': { title: 'Not saved', statuses: ['failed', 'locked', 'still_recording'] },
+  stopped: { title: 'Stopped', statuses: ['cancelled'] }
+}
+
+const stat = ({ label, value, tone = '', list }) => {
+  const parts = [h('span', { className: 'stat-label' }, label), h('span', { className: 'stat-value' }, String(value))]
+  if (value === 0) return h('div', { className: `stat ${tone}`, 'data-list': list }, ...parts)
+  return h('button', {
+    type: 'button',
+    className: `stat is-clickable ${tone}`,
+    'data-list': list,
+    'aria-label': `${label}: ${value}. Show list`,
+    onclick: () => openResultList(list)
+  }, ...parts, h('span', { className: 'stat-more' }, 'Show list'))
+}
+
+const resultEpisodes = (list) => state.save.order.filter(episode => RESULT_LISTS[list].statuses.includes(state.save.rows.get(episode.id)?.status))
+
+const openResultList = (list) => {
+  const episodes = resultEpisodes(list)
+  const explained = list === 'not-saved' || list === 'stopped'
+  const body = [
+    list === 'saved' || list === 'already'
+      ? h('p', { className: 'meta', id: 'result-folder' }, 'In ', h('strong', {}, lastParts(state.folder, 1)))
+      : null,
+    h('ul', { className: 'table', id: `result-list-${list}` }, ...episodes.map(episode => explained ? problemRow(episode) : resultRow(episode)))
+  ]
+  const footer = explained
+    ? [h('button', { type: 'button', className: 'btn primary', id: 'dialog-save-again', onclick: saveAgainFromDialog }, 'Save again')]
+    : []
+  openInfo({ title: RESULT_LISTS[list].title, body, footer })
+}
+
+const recordingName = ({ show, episode }) => (!show || show.title === episode.title ? episode.title : `${show.title} · ${episode.title}`)
+
+const resultRow = (episode) => {
+  const show = state.shows.find(item => item.episodes.includes(episode))
+  return h('li', { className: 'row' },
+    h('div', { className: 'row-main is-plain' },
+      h('span', { className: 'row-text' }, h('span', { className: 'row-title' }, recordingName({ show, episode })))))
+}
+
+const saveAgainFromDialog = () => {
+  document.getElementById('info-dialog').close()
+  beginSave()
+}
 
 const saveErrorScreen = () => ({
   content: [
@@ -715,11 +834,11 @@ const problemRow = (episode) => {
   const row = state.save.rows.get(episode.id)
   const show = state.shows.find(item => item.episodes.includes(episode))
   const reason = h('p', { className: 'drawer-text', hidden: true }, row.reason || 'Not started.')
-  const reveal = h('span', { className: 'row-reveal' }, 'Why')
+  const reveal = h('span', { className: 'row-reveal is-always' }, 'Why')
   const main = h('div', { className: 'row-main is-clickable', role: 'button', tabindex: '0', 'aria-expanded': 'false' },
     h('span', { className: 'row-text' },
-      h('span', { className: 'row-title' }, `${show?.title ?? ''}: ${episode.title}`),
-      h('span', { className: 'row-detail' }, statusLabel(row))),
+      h('span', { className: 'row-title' }, recordingName({ show, episode })),
+      statusLabel(row) === 'Not saved' ? null : h('span', { className: 'row-detail' }, statusLabel(row))),
     h('span', { className: 'row-side' }, reveal))
   const toggle = () => {
     reason.hidden = !reason.hidden
@@ -758,18 +877,30 @@ const infoButton = ({ label, onclick }) => h('button', { type: 'button', classNa
 
 const setUpDialog = () => {
   const dialog = document.getElementById('info-dialog')
+  window.addEventListener('resize', () => { if (dialog.open) updateScrollableBody() })
   dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close() })
   document.getElementById('info-close').addEventListener('click', () => dialog.close())
 }
 
-const openInfo = ({ title, body }) => {
+const openInfo = ({ title, body, footer = [], variant = '' }) => {
   const dialog = document.getElementById('info-dialog')
-  const opener = document.activeElement
+  const bodyElement = document.getElementById('info-body')
+  const footElement = document.getElementById('info-foot')
+  dialog.className = `dialog${variant ? ` is-${variant}` : ''}`
   document.getElementById('info-title').textContent = title
-  document.getElementById('info-body').replaceChildren(...body.filter(Boolean))
-  dialog.addEventListener('close', () => opener?.focus?.(), { once: true })
+  bodyElement.replaceChildren(...body.filter(Boolean))
+  footElement.replaceChildren(...footer.filter(Boolean))
+  footElement.hidden = footer.filter(Boolean).length === 0
   dialog.showModal()
+  bodyElement.scrollTop = 0
+  updateScrollableBody()
   document.getElementById('info-close').focus()
+}
+
+const updateScrollableBody = () => {
+  const bodyElement = document.getElementById('info-body')
+  if (bodyElement.scrollHeight > bodyElement.clientHeight + 1) bodyElement.setAttribute('tabindex', '0')
+  else bodyElement.removeAttribute('tabindex')
 }
 
 const showScreen = (step, screen) => {
@@ -790,7 +921,9 @@ const showScreen = (step, screen) => {
   view.focus({ preventScroll: true })
 }
 
-const PROJECT_URL = 'https://github.com/furey/fetchtv'
+const APP_REPOSITORY = 'furey/fetch-my-recordings'
+const APP_REPOSITORY_URL = `https://github.com/${APP_REPOSITORY}`
+const FETCHTV_REPOSITORY_URL = 'https://github.com/furey/fetchtv'
 const GITHUB_MARK_PATH = 'M6.766 11.328c-2.063-.25-3.516-1.734-3.516-3.656 0-.781.281-1.625.75-2.188-.203-.515-.172-1.609.063-2.062.625-.078 1.468.25 1.968.703.594-.187 1.219-.281 1.985-.281.765 0 1.39.094 1.953.265.484-.437 1.344-.765 1.969-.687.218.422.25 1.515.046 2.047.5.593.766 1.39.766 2.203 0 1.922-1.453 3.375-3.547 3.64.531.344.89 1.094.89 1.954v1.625c0 .468.391.734.86.547C13.781 14.359 16 11.53 16 8.03 16 3.61 12.406 0 7.984 0 3.563 0 0 3.61 0 8.031a7.88 7.88 0 0 0 5.172 7.422c.422.156.828-.125.828-.547v-1.25c-.219.094-.5.156-.75.156-1.031 0-1.64-.562-2.078-1.609-.172-.422-.36-.672-.719-.719-.187-.015-.25-.093-.25-.187 0-.188.313-.328.625-.328.453 0 .844.281 1.25.86.313.452.64.655 1.031.655s.641-.14 1-.5c.266-.265.47-.5.657-.656'
 
 const githubLink = () => {
@@ -806,11 +939,18 @@ const githubLink = () => {
   return h('button', {
     type: 'button',
     className: 'github-link',
-    'aria-label': 'fetchtv on GitHub',
-    title: PROJECT_URL,
+    'aria-label': 'Fetch My Recordings on GitHub',
+    title: APP_REPOSITORY_URL,
     onclick: () => api.openProjectPage()
-  }, icon, h('span', {}, 'furey/fetchtv'))
+  }, icon, h('span', {}, APP_REPOSITORY))
 }
+
+const fetchtvLink = () => h('button', {
+  type: 'button',
+  className: 'link is-inline',
+  title: FETCHTV_REPOSITORY_URL,
+  onclick: () => api.openFetchtvPage()
+}, 'fetchtv command-line tool')
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 const MARK_CHIPS = [

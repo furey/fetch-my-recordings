@@ -1,5 +1,5 @@
 import fs from 'node:fs/promises'
-import { saveRecordings } from '../../fetchtv.js'
+import { saveRecordings } from 'fetchtv'
 
 export const startSave = ({ recordings, folder, forPlex, retryDelays, onProgress, onResult }) => {
   const controller = new AbortController()

@@ -1,0 +1,288 @@
+# fetch-my-recordings
+
+Fetch My Recordings is a free desktop app for Mac, Windows, and Linux that copies the recordings on a Fetch TV box to a folder on your computer.
+
+Prefer a terminal, a NAS, or Docker? See [Related projects](#related-projects).
+
+<https://github.com/user-attachments/assets/49d593ee-45a1-4f73-bb15-3de4feb5f739>
+
+> [!NOTE]<br>
+> Fetch's [Gen 3 Extended Service Levy](https://news.fetchtv.com.au/extended-service-levy-1) applies to Mini Gen 3 and Mighty Gen 3 owners from `1 November 2026`. Copy your recordings while the box still lists them: a box whose Fetch account is cancelled lists no recordings. To record free-to-air TV without Fetch, see [Freetvarr](https://github.com/furey/freetvarr).
+
+## Contents
+
+- [Overview](#overview)
+- [Download](#download)
+- [First open](#first-open)
+- [Using the app](#using-the-app)
+- [Built on fetchtv](#built-on-fetchtv)
+- [Related projects](#related-projects)
+- [Development](#development)
+- [Disclaimer](#disclaimer)
+- [Support](#support)
+
+## Overview
+
+<img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/app-icon.png" alt="The Fetch My Recordings app icon: three coloured bars in a mint tray" width="96"/>
+
+Fetch My Recordings finds your Fetch box on your home network and copies the recordings you choose to a folder on your computer. You do not need a terminal or a Fetch account.
+
+Fetch My Recordings is an independent, free tool made by a Fetch customer. It is not made, endorsed, or supported by Fetch TV. Fetch is a trademark of its owner.
+
+## Download
+
+Download the file for your computer. Each link gets the newest version.
+
+| Computer                                | Download                                                                                                                                                       |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mac with an Apple chip (M1 or later)    | [`Fetch-My-Recordings-mac-arm64.dmg`](https://github.com/furey/fetch-my-recordings/releases/latest/download/Fetch-My-Recordings-mac-arm64.dmg)                 |
+| Mac with an Intel chip                  | [`Fetch-My-Recordings-mac-x64.dmg`](https://github.com/furey/fetch-my-recordings/releases/latest/download/Fetch-My-Recordings-mac-x64.dmg)                     |
+| Windows PC                              | [`Fetch-My-Recordings-win-x64.exe`](https://github.com/furey/fetch-my-recordings/releases/latest/download/Fetch-My-Recordings-win-x64.exe)                     |
+| Linux computer (Intel or AMD)           | [`Fetch-My-Recordings-linux-x86_64.AppImage`](https://github.com/furey/fetch-my-recordings/releases/latest/download/Fetch-My-Recordings-linux-x86_64.AppImage) |
+| Linux computer (ARM, e.g. Raspberry Pi) | [`Fetch-My-Recordings-linux-arm64.AppImage`](https://github.com/furey/fetch-my-recordings/releases/latest/download/Fetch-My-Recordings-linux-arm64.AppImage)   |
+
+To check which chip a Mac has, open the Apple menu and choose **About This Mac**. A **Chip** line that says Apple M1, M2, M3, or later means an Apple chip. A **Processor** line that says Intel means an Intel chip.
+
+All versions are on the [releases page](https://github.com/furey/fetch-my-recordings/releases).
+
+## First open
+
+- [First open overview](#first-open-overview)
+- [First open on a Mac](#first-open-on-a-mac)
+- [First open on Windows](#first-open-on-windows)
+- [First open on Linux](#first-open-on-linux)
+
+### First open overview
+
+Fetch My Recordings is free and open source. Anyone can read its code in this repository. Apple and Microsoft charge every year for the certificate that signs an app, so the app is unsigned. Because of this, your computer shows a warning the first time you open it. The steps below show each warning and the button to press.
+
+The app talks only to the Fetch box on your home network. It reads and writes only the folder you choose and its own settings. It deletes nothing from the Fetch box.
+
+> [!NOTE]<br>
+> The pictures in the steps below are illustrations of the system messages, not screenshots. The wording on your computer can differ a little.
+
+### First open on a Mac
+
+These steps match macOS 15 Sequoia and later, on a Mac with an Apple chip or an Intel chip.
+
+1. Open the `.dmg` file you downloaded.
+2. Drag **Fetch My Recordings** into the **Applications** folder.
+3. Open the **Applications** folder and double-click **Fetch My Recordings**.
+4. A message says "Fetch My Recordings" Not Opened. Click **Done**. Do not click **Move to Trash**.
+
+   <p align="center">
+     <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/first-open-mac-not-opened.png" alt="Illustration of the macOS message: Fetch My Recordings Not Opened, Apple could not verify it is free of malware, with the Done button marked" width="600"/>
+     <br/><em>Illustration: the first macOS message</em>
+   </p>
+
+5. Open the Apple menu and choose **System Settings**.
+6. Click **Privacy & Security** in the sidebar.
+7. Scroll down to the **Security** section.
+8. Next to "Fetch My Recordings" was blocked to protect your Mac, click **Open Anyway**.
+
+   <p align="center">
+     <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/first-open-mac-privacy-security.png" alt="Illustration of Privacy and Security settings, with the Open Anyway button marked" width="600"/>
+     <br/><em>Illustration: Open Anyway in Privacy &amp; Security</em>
+   </p>
+
+9. Click **Open Anyway** in the next message.
+
+   <p align="center">
+     <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/first-open-mac-open-anyway.png" alt="Illustration of the second macOS message, with the Open Anyway button marked" width="600"/>
+     <br/><em>Illustration: the second Open Anyway message</em>
+   </p>
+
+10. Type your Mac login password, or use Touch ID, when your Mac asks.
+11. Wait for the app to open.
+
+The **Open Anyway** button stays for about one hour after you first try to open the app. If it is gone, do steps 3 and 4 again, then continue from step 5.
+
+When the app first searches for your Fetch box, your Mac asks whether Fetch My Recordings can find devices on your local network. Click **Allow**. The app needs this to find your Fetch box.
+
+<p align="center">
+  <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/first-open-mac-local-network.png" alt="Illustration of the macOS question about devices on your local network, with the Allow button marked" width="600"/>
+  <br/><em>Illustration: the local network question</em>
+</p>
+
+If you clicked **Don't Allow**, open **System Settings** → **Privacy & Security** → **Local Network**, then turn on **Fetch My Recordings**.
+
+You do these steps once. After that, the app opens with a double-click.
+
+> [!TIP]<br>
+> On macOS 14 Sonoma or earlier, there is a shorter way. Hold the Control key and click **Fetch My Recordings** in the **Applications** folder. Choose **Open**, then click **Open** in the message.
+
+### First open on Windows
+
+1. Double-click the `.exe` file you downloaded.
+2. A blue message says Windows protected your PC. Click **More info**.
+
+   <p align="center">
+     <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/first-open-windows-protected.png" alt="Illustration of the blue Windows protected your PC message, with the More info link marked" width="600"/>
+     <br/><em>Illustration: Windows protected your PC</em>
+   </p>
+
+3. Check that the **Publisher** line says Unknown publisher.
+4. Click **Run anyway**.
+
+   <p align="center">
+     <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/first-open-windows-run-anyway.png" alt="Illustration of the same message after More info, with the Run anyway button marked" width="600"/>
+     <br/><em>Illustration: the Run anyway button</em>
+   </p>
+
+5. Wait for the app to install and open. It installs for your Windows user only, and it is in the Start menu after that.
+
+The first time the app searches for your Fetch box, Windows Security can ask whether to allow Fetch My Recordings on your networks:
+
+1. Tick **Private networks, such as my home or work network**.
+2. Leave **Public networks** unticked.
+3. Click **Allow access**.
+
+<p align="center">
+  <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/first-open-windows-firewall.png" alt="Illustration of the Windows Security Alert for Fetch My Recordings, with Private networks ticked and the Allow access button marked" width="600"/>
+  <br/><em>Illustration: the Windows Security Alert</em>
+</p>
+
+If you click **Cancel**, the app cannot search for the box. You can still type the IP address of your Fetch box (see [Using the app](#using-the-app)).
+
+### First open on Linux
+
+1. Open your file manager and find the `.AppImage` file you downloaded.
+2. Right-click the file and choose **Properties**.
+3. Click the **Permissions** tab.
+4. Turn on **Allow executing file as program**. Newer versions of GNOME Files call it **Executable as Program**. KDE Dolphin calls it **Is executable**.
+
+   <p align="center">
+     <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/first-open-linux-allow-executing.png" alt="Illustration of the file Properties window on the Permissions tab, with Allow executing file as program marked" width="600"/>
+     <br/><em>Illustration: Allow executing file as program</em>
+   </p>
+
+5. Close the **Properties** window.
+6. Double-click the file.
+
+To do the same in a terminal, run these commands in the folder with the file:
+
+```console
+chmod +x Fetch-My-Recordings-linux-x86_64.AppImage
+./Fetch-My-Recordings-linux-x86_64.AppImage
+```
+
+If the app does not open on Ubuntu 22.04 or later, install FUSE, which every AppImage needs:
+
+- On Ubuntu 22.04, run `sudo apt install libfuse2`.
+- On Ubuntu 24.04 or later, run `sudo apt install libfuse2t64`.
+
+If the app still does not open on Ubuntu 24.04 or later, start it from a terminal with `--no-sandbox` after the file name. This turns off Electron's sandbox (a limit on what the app's window can do), so use the option only for this app.
+
+## Using the app
+
+Click **Start** on the welcome screen. The app then takes you through these steps:
+
+1. **Find your Fetch box**: the app searches your home network. If it finds no box, check that the box is on and that your computer is on the same home network, then search again. You can also type the box's IP address: four numbers with dots between them, such as `192.168.1.50`. Find it in your router's list of connected devices, or in the network details of the Fetch box's settings menu.
+2. **Choose recordings**: every recording you have not saved before starts ticked. Click **Show** next to a show to tick or untick single episodes. A recording that is still recording cannot be saved until it ends.
+3. **Choose a folder**: the app shows the free space in the folder and the space the recordings need. Turn on **Names for Plex, Jellyfin or Kodi** if you watch recordings in one of those apps. The files are then saved as `Show/Season 01/Show - S01E02.ts`.
+4. **Save**: the app shows the progress of each recording. Your computer stays awake until the save finishes. Click **Stop** at any time.
+
+<p align="center">
+  <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/app-welcome.png" alt="The Fetch My Recordings welcome screen with the Start button" width="720"/>
+  <br/><em>The welcome screen</em>
+</p>
+
+The app remembers what it saved from each box. On the **Choose recordings** step, a recording you saved before shows **Saved** and starts unticked. A recording shows **Moved or deleted** when its saved file is no longer where the app put it. That recording starts ticked, so **Save** copies it again.
+
+<p align="center">
+  <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/app-choose-recordings.png" alt="The Choose recordings step: one episode marked Saved, one marked Moved or deleted, and one new episode with its size" width="720"/>
+  <br/><em>Choose recordings, with Saved and Moved or deleted episodes</em>
+</p>
+
+When the save ends, the app counts the recordings it saved, the recordings that were already saved, and the recordings it could not save. Click a count to see the list of those recordings. Click **Open folder** to see the files.
+
+<p align="center">
+  <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/app-all-done.png" alt="The All done screen: 9 saved, 0 already saved, 0 not saved, and a card that asks I have my files, but now what?" width="720"/>
+  <br/><em>The All done screen</em>
+</p>
+
+Click **How to watch your recordings** to see how to watch the files on this computer or on your TV.
+
+<p align="center">
+  <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/app-how-to-watch.png" alt="The How to watch your recordings dialog on the On your TV tab: a USB drive, an Apple TV, phone or tablet, or Plex, Jellyfin or Kodi" width="720"/>
+  <br/><em>How to watch your recordings</em>
+</p>
+
+If a save stops part way, or some recordings are not saved, click **Save again**. The app skips the recordings that are already in the folder and continues a part-saved recording from where it stopped. The app keeps its list of saved files in a `fetchtv.json` file in the folder, the same file the [`fetchtv` command-line tool](https://github.com/furey/fetchtv) uses. So the app and `fetchtv` can take turns on one folder.
+
+If the app says the box has no recordings, check the TV. A Fetch box whose account is cancelled shows its setup screen on the TV and lists no recordings.
+
+## Built on fetchtv
+
+The app uses [`fetchtv`](https://github.com/furey/fetchtv), a free command-line tool by the same author, to find Fetch boxes, list recordings, and save them. It imports the [`fetchtv` npm package](https://www.npmjs.com/package/fetchtv), and the build bundles it into the app. A fix to finding, listing, or saving goes into `fetchtv` first, then into a new app release.
+
+Both write the same `fetchtv.json` file in the save folder, so the app skips recordings that `fetchtv` saved, and `fetchtv` skips recordings that the app saved.
+
+## Related projects
+
+- [`fetchtv`](https://github.com/furey/fetchtv): the command-line tool this app is built on, for a terminal, a NAS, or Docker.
+- [Freetvarr](https://furey.github.io/freetvarr/) ([repository](https://github.com/furey/freetvarr)): a free app by the same author that records free-to-air TV without Fetch, with a TV tuner on your home network.
+
+## Development
+
+- [Development overview](#development-overview)
+- [Commands](#commands)
+- [Demo video](#demo-video)
+- [Build workflow](#build-workflow)
+
+### Development overview
+
+Fetch My Recordings is an [Electron](https://www.electronjs.org) app. `scripts/bundle.mjs` bundles `src/main.js` and `fetchtv` into `dist/main.mjs` with esbuild, and copies the window's files from `src/renderer` into `dist`. Node.js `22` or later is required.
+
+```console
+git clone https://github.com/furey/fetch-my-recordings.git
+cd fetch-my-recordings
+npm ci
+npm start
+```
+
+To try the app without a Fetch box, run `npm run fake-box` in a second terminal. It starts a pretend Fetch box with made-up shows on port `49152`. The pretend box acts like a real one: it overstates each file's size, resets the connection at the end, and answers a resume with `416`. It also answers the app's search, or you can type `127.0.0.1` as the IP address. Add `--empty` for a box with no recordings, or `--mb-per-second=2` for a slow box.
+
+### Commands
+
+| Command              | Effect                                                                                    |
+| -------------------- | ----------------------------------------------------------------------------------------- |
+| `npm start`          | Bundles the app and opens it                                                              |
+| `npm test`           | Runs the unit tests and the end-to-end tests, which drive the app against the pretend box |
+| `npm run dist`       | Builds the app for the computer you run it on, into `release`                             |
+| `npm run dist:mac`   | Builds the macOS `.dmg` and `.zip` files (Apple chip and Intel)                           |
+| `npm run dist:win`   | Builds the Windows installer                                                              |
+| `npm run dist:linux` | Builds the Linux AppImages (`x86_64` and `arm64`)                                         |
+
+The end-to-end tests include a search for the pretend box over the network (SSDP). Set `FETCHTV_E2E_SKIP_SSDP=1` to skip that test when a firewall blocks it, for example Little Snitch on a Mac.
+
+### Demo video
+
+[`scripts/record-demo.mjs`](./scripts/record-demo.mjs) records the demo video at the top of this README. It starts a pretend box with demo shows, drives the app, and joins the frames, cursor, and sounds into an MP4 file with `ffmpeg`. Run `npm run bundle` first, then:
+
+```console
+node scripts/record-demo.mjs --out /tmp/demo --mp4 /tmp/demo/demo.mp4 --poster /tmp/demo/poster.png
+```
+
+Add `--executable <path>` to record a built app instead of the source.
+
+### Build workflow
+
+[`build.yml`](./.github/workflows/build.yml) runs on a push to `main` or `develop`, a version tag, a pull request, or by hand. On macOS, Windows, and Ubuntu runners it runs `npm test` (under `xvfb` on Ubuntu) and builds the app with `electron-builder`. The builds are kept as workflow artefacts.
+
+For a pushed version tag (e.g. `1.0.0`), a second job waits up to 30 minutes for the GitHub release of that tag. It then attaches the `.dmg`, `.zip`, `.exe`, and `.AppImage` files to the release. Only that job can write to the repository.
+
+## Disclaimer
+
+This project:
+
+- Is licensed under the [GNU GPLv3 License](./LICENSE.txt). The GitHub mark is from [GitHub Octicons](https://github.com/primer/octicons) (MIT licence, [`src/renderer/licences/octicons-MIT.txt`](./src/renderer/licences/octicons-MIT.txt)). The Figtree and Geist Mono fonts are under the SIL Open Font Licence 1.1 (in [`src/renderer/fonts`](./src/renderer/fonts)).
+- Is not made, endorsed, or supported by Fetch TV.
+- Is written with the assistance of AI and may contain errors.
+- Is provided as-is with no warranty. Use it at your own risk.
+
+## Support
+
+If you've found this project helpful, consider supporting my work through:
+
+[Buy Me a Coffee](https://www.buymeacoffee.com/furey) | [GitHub Sponsorship](https://github.com/sponsors/furey)

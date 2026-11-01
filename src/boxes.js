@@ -1,4 +1,4 @@
-import { discoverFetch, discoverFetchServers } from '../../fetchtv.js'
+import { discoverFetch, discoverFetchServers } from 'fetchtv'
 
 export const FETCH_PORT = 49152
 

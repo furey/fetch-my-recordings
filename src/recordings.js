@@ -1,4 +1,4 @@
-import { getFetchRecordings, isCurrentlyRecording, sortRecordingsByTitle } from '../../fetchtv.js'
+import { getFetchRecordings, isCurrentlyRecording, sortRecordingsByTitle } from 'fetchtv'
 
 export const listRecordings = async ({ location, onProgress }) => {
   const shows = sortRecordingsByTitle(await getFetchRecordings({ location, filters: {}, onProgress }))

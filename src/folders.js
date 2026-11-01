@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { loadSavedFiles } from '../../fetchtv.js'
+import { loadSavedFiles } from 'fetchtv'
 
 export const describeFolder = async ({ folder, items }) => {
   const existing = await nearestExistingFolder(folder)

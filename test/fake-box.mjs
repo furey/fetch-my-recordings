@@ -5,20 +5,19 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import NodeSsdp from 'node-ssdp'
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
-const mediaServerFixture = path.join(repoRoot, 'test', 'fixtures', 'media-server.xml')
+const mediaServerFixture = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'media-server.xml')
 
 export const FETCH_BOX_OVERSTATEMENT = 84
 export const MB = 1024 * 1024
 
 export const demoShows = ({ size = 3 * MB } = {}) => [
   {
-    title: 'Harbour Lights',
+    title: 'Master Cook',
     items: [
-      { title: 'S1 E1 - The Lighthouse Keeper', size, duration: '0:58:12' },
-      { title: 'S1 E2 - Low Tide', size: size + 4096, duration: '0:57:40' },
-      { title: 'S1 E3 - Storm Warning', size: size + 8192, duration: '0:59:03' },
-      { title: 'S1 E4 - Safe Harbour', size: size + 12288, duration: '1:01:27' }
+      { title: 'S1 E1 - Auditions', size, duration: '0:58:12' },
+      { title: 'S1 E2 - Mystery Box', size: size + 4096, duration: '0:57:40' },
+      { title: 'S1 E3 - Team Challenge', size: size + 8192, duration: '0:59:03' },
+      { title: 'S1 E4 - Elimination', size: size + 12288, duration: '1:01:27' }
     ]
   },
   {
@@ -29,21 +28,59 @@ export const demoShows = ({ size = 3 * MB } = {}) => [
     ]
   },
   {
-    title: 'The Night Market',
-    items: [{ title: 'The Night Market', size: size * 3, duration: '1:52:30' }]
+    title: 'Mission Improbable',
+    items: [{ title: 'Mission Improbable', size: size * 3, duration: '1:52:30' }]
   },
   {
-    title: 'Coastal Kitchen',
+    title: 'Jurassic Car Park',
+    items: [{ title: 'Jurassic Car Park', size: size * 2, duration: '2:07:15' }]
+  },
+  {
+    title: 'Bigger Brother',
     items: [
-      { title: 'S2 E5 - Oysters', size: size + 1024, duration: '0:28:45' },
-      { title: 'S2 E6 - Sourdough', size: -1, duration: '0:00:00', stillRecording: true }
+      { title: 'S2 E5 - Day Forty', size: size + 1024, duration: '0:28:45' },
+      { title: 'S2 E6 - Eviction Night', size: -1, duration: '0:00:00', stillRecording: true }
     ]
   },
   {
-    title: 'Morning Weather Report',
-    items: [{ title: 'Morning Weather Report', size: Math.round(size / 2), duration: '0:15:00' }]
+    title: 'The Footy Panel',
+    items: [{ title: 'The Footy Panel', size: Math.round(size / 2), duration: '0:58:00' }]
   }
 ]
+
+const BIG_LIBRARY_SERIES = [
+  'Master Cook', 'Bigger Brother', 'Backyard Builders', 'Coastal Kitchen', 'Grand Resigns', 'Married at First Fright',
+  'The Amazing Pace', 'Thriver: Bondi Car Park', 'Gardening Austral-ish', 'Better Homes and Sheds', 'The Blockheads',
+  'Australian Idle', 'Soft Quiz', 'Gobblebox', 'Escape to the Outer Suburbs', 'The Great Australian Fake Off',
+  'A Very Long Programme About Restoring Old Caravans in the Middle of Nowhere', 'Blue Sky Thinking', 'The Race to the Fridge',
+  'Dancing With the Stairs', 'Who Wants to Be a Thousandaire', 'Location Location Relocation', 'Selling Mouses Australia',
+  'Kitchen Daydreams at Nan’s', 'Love Peninsula', 'The Choice', 'Fishing Down Under the Bridge', 'Antiques Showroad',
+  'Restoration Garbage', 'Police Tea Break', 'Bondi Pet', 'The Footy Panel', 'The Sports Show', 'Football'
+]
+
+const BIG_LIBRARY_FILMS = ['Mission Improbable', 'Space Wars', 'Jurassic Car Park', 'Lord of the Wings', 'Back to the Futon', 'Raiders of the Lost Car Keys']
+
+const EPISODE_WORDS = ['Auditions', 'Mystery Box', 'Team Challenge', 'Elimination', 'Grand Final', 'Road Trip', 'The Big Reveal', 'Family Week', 'Second Chances', 'Finale']
+
+export const bigLibrary = ({ size = 64 * 1024, failEvery = 23 } = {}) => {
+  let count = 0
+  const nextQuirks = () => (++count % failEvery === 0 ? { alwaysDropAt: Math.round(size / 2) } : undefined)
+  const series = BIG_LIBRARY_SERIES.map((title, index) => {
+    const season = 1 + (index % 9)
+    const episodes = 4 + (index % 6) + (index % 3)
+    return {
+      title,
+      items: Array.from({ length: episodes }, (_, episode) => ({
+        title: `S${season} E${episode + 1} - ${EPISODE_WORDS[(index + episode) % EPISODE_WORDS.length]}${index % 7 === 0 ? ', Part Two of a Much Longer Story Than Expected' : ''}`,
+        size: size + episode * 512,
+        duration: '0:58:00',
+        quirks: nextQuirks()
+      }))
+    }
+  })
+  const films = BIG_LIBRARY_FILMS.map(title => ({ title, items: [{ title, size: size * 2, duration: '1:58:00', quirks: nextQuirks() }] }))
+  return [...series, ...films]
+}
 
 export const startFakeBox = async ({
   shows = demoShows(),
@@ -192,7 +229,12 @@ const sendRecording = ({ req, res, item, quirks, attempt, bytesPerSecond }) => {
   if (req.method === 'HEAD') return res.end()
   const dropAt = quirks.alwaysDropAt || (attempt === 1 ? quirks.dropFirstAttemptAt : 0)
   const end = dropAt > from ? Math.min(dropAt, item.actualSize) : item.actualSize
-  streamBytes({ res, item, from, end, bytesPerSecond, finish: () => (end < item.actualSize || quirks.resetAtEnd ? res.socket?.destroy() : res.end()) })
+  streamBytes({ res, item, from, end, bytesPerSecond, finish: () => (end < item.actualSize || quirks.resetAtEnd ? resetConnection(res) : res.end()) })
+}
+
+const resetConnection = (res) => {
+  if (res.socket) res.socket.destroy()
+  else res.destroy()
 }
 
 const streamBytes = ({ res, item, from, end, bytesPerSecond, finish }) => {
