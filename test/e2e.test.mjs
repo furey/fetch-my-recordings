@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { _electron as electron } from 'playwright-core'
-import { MB, demoShows, recordingBytes, startFakeBox } from './fake-box.mjs'
+import { MB, bigLibrary, demoShows, recordingBytes, startFakeBox } from './fake-box.mjs'
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const screenshotDir = process.env.FETCHTV_SCREENSHOTS_DIR
@@ -375,6 +375,58 @@ test('after a save: the card opens How to watch your recordings with three tabs 
     await dialog.getByRole('button', { name: 'Save again with Plex names' }).click()
     await page.getByRole('heading', { name: 'Choose a folder' }).waitFor()
     assert.equal(await page.getByRole('switch', { name: 'Names for Plex, Jellyfin or Kodi' }).getAttribute('aria-checked'), 'true')
+  } finally {
+    await app.close()
+    await box.stop()
+  }
+})
+
+test('long result lists scroll inside the dialog, keep the title and Save again in view, and leave the page still', async () => {
+  const box = await startFakeBox({ shows: bigLibrary() })
+  const userData = await freshDir('user-data-long')
+  const saveFolder = await freshDir('long')
+  await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify({ lastAddress: box.address, lastFolder: saveFolder }))
+  const app = await launchApp({ userData })
+  try {
+    const page = await openApp(app)
+    await page.getByRole('heading', { name: 'Choose recordings' }).waitFor({ timeout: 30000 })
+    await page.getByRole('button', { name: 'Next' }).click()
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await waitForFinish({ page, heading: 'Some not saved', timeout: 170000 })
+    const mainTop = await page.locator('main').evaluate(element => element.scrollTop)
+    const body = page.locator('#info-body')
+    const inView = (selector) => page.evaluate((target) => {
+      const element = document.querySelector(target)
+      const box = element.getBoundingClientRect()
+      return box.top >= 0 && box.bottom <= window.innerHeight
+    }, selector)
+    const lastRowVisible = () => page.evaluate(() => {
+      const body = document.getElementById('info-body')
+      const last = body.querySelector('.row:last-child').getBoundingClientRect()
+      return last.bottom <= body.getBoundingClientRect().bottom
+    })
+    for (const list of ['saved', 'not-saved']) {
+      await page.locator(`.stat[data-list="${list}"]`).click()
+      assert.equal(await body.evaluate(element => element.scrollTop), 0)
+      assert.ok(await body.evaluate(element => element.scrollHeight > element.clientHeight), `${list} list does not scroll`)
+      const bodyBox = await body.boundingBox()
+      await page.mouse.move(bodyBox.x + bodyBox.width / 2, bodyBox.y + bodyBox.height / 2)
+      await page.mouse.wheel(0, 100000)
+      await page.waitForFunction(() => {
+        const element = document.getElementById('info-body')
+        return Math.abs(element.scrollHeight - element.clientHeight - element.scrollTop) < 2
+      })
+      assert.equal(await lastRowVisible(), true)
+      assert.equal(await inView('#info-title'), true)
+      assert.equal(await inView('#info-close'), true)
+      if (list === 'not-saved') assert.equal(await inView('#dialog-save-again'), true)
+      assert.equal(await page.evaluate(() => document.getElementById('info-dialog').scrollTop), 0)
+      await page.keyboard.press('Escape')
+      await page.locator('#info-dialog').waitFor({ state: 'hidden' })
+      assert.equal(await page.locator('main').evaluate(element => element.scrollTop), mainTop)
+    }
+    await page.locator('.stat[data-list="saved"]').click()
+    assert.equal(await body.evaluate(element => element.scrollTop), 0)
   } finally {
     await app.close()
     await box.stop()

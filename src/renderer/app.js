@@ -739,6 +739,11 @@ const whatNowInfo = () => {
   const show = (id) => {
     buttons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.section === id)))
     panel.replaceChildren(...whatNowSection(id))
+    const bodyElement = document.getElementById('info-body')
+    if (bodyElement) {
+      bodyElement.scrollTop = 0
+      updateScrollableBody()
+    }
   }
   show('computer')
   openInfo({
@@ -792,12 +797,12 @@ const openResultList = (list) => {
     list === 'saved' || list === 'already'
       ? h('p', { className: 'meta', id: 'result-folder' }, 'In ', h('strong', {}, lastParts(state.folder, 1)))
       : null,
-    h('ul', { className: 'table', id: `result-list-${list}` }, ...episodes.map(episode => explained ? problemRow(episode) : resultRow(episode))),
-    explained
-      ? h('p', { className: 'dialog-actions' }, h('button', { type: 'button', className: 'btn primary', id: 'dialog-save-again', onclick: saveAgainFromDialog }, 'Save again'))
-      : null
+    h('ul', { className: 'table', id: `result-list-${list}` }, ...episodes.map(episode => explained ? problemRow(episode) : resultRow(episode)))
   ]
-  openInfo({ title: RESULT_LISTS[list].title, body })
+  const footer = explained
+    ? [h('button', { type: 'button', className: 'btn primary', id: 'dialog-save-again', onclick: saveAgainFromDialog }, 'Save again')]
+    : []
+  openInfo({ title: RESULT_LISTS[list].title, body, footer })
 }
 
 const recordingName = ({ show, episode }) => (!show || show.title === episode.title ? episode.title : `${show.title} · ${episode.title}`)
@@ -872,19 +877,32 @@ const infoButton = ({ label, onclick }) => h('button', { type: 'button', classNa
 
 const setUpDialog = () => {
   const dialog = document.getElementById('info-dialog')
+  window.addEventListener('resize', () => { if (dialog.open) updateScrollableBody() })
   dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close() })
   document.getElementById('info-close').addEventListener('click', () => dialog.close())
 }
 
-const openInfo = ({ title, body, variant = '' }) => {
+const openInfo = ({ title, body, footer = [], variant = '' }) => {
   const dialog = document.getElementById('info-dialog')
   const opener = document.activeElement
+  const bodyElement = document.getElementById('info-body')
+  const footElement = document.getElementById('info-foot')
   dialog.className = `dialog${variant ? ` is-${variant}` : ''}`
   document.getElementById('info-title').textContent = title
-  document.getElementById('info-body').replaceChildren(...body.filter(Boolean))
+  bodyElement.replaceChildren(...body.filter(Boolean))
+  footElement.replaceChildren(...footer.filter(Boolean))
+  footElement.hidden = footer.filter(Boolean).length === 0
   dialog.addEventListener('close', () => opener?.focus?.(), { once: true })
   dialog.showModal()
+  bodyElement.scrollTop = 0
+  updateScrollableBody()
   document.getElementById('info-close').focus()
+}
+
+const updateScrollableBody = () => {
+  const bodyElement = document.getElementById('info-body')
+  if (bodyElement.scrollHeight > bodyElement.clientHeight + 1) bodyElement.setAttribute('tabindex', '0')
+  else bodyElement.removeAttribute('tabindex')
 }
 
 const showScreen = (step, screen) => {
