@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 
 const MAX_LOG_BYTES = 512 * 1024
@@ -11,7 +12,7 @@ export const createStartupLog = (folder) => {
     try {
       fs.mkdirSync(folder, { recursive: true })
       if (sizeOf(filePath) > MAX_LOG_BYTES) fs.renameSync(filePath, previousPath)
-      fs.appendFileSync(filePath, `${new Date().toISOString()} [${process.pid}] ${message}\n`)
+      fs.appendFileSync(filePath, `${new Date().toISOString()} [${process.pid}] ${hideHome(message)}\n`)
     } catch {
       return false
     }
@@ -24,6 +25,14 @@ export const createStartupLog = (folder) => {
 export const describeError = (error) => error instanceof Error
   ? error.stack ?? `${error.name}: ${error.message}`
   : String(error)
+
+const hideHome = (text) => {
+  const home = os.homedir()
+  if (!home) return text
+  return text
+    .replaceAll(home, '~')
+    .replaceAll(encodeURI(home.replaceAll('\\', '/')), '~')
+}
 
 const sizeOf = (filePath) => {
   try {

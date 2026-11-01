@@ -1,38 +1,35 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-export const MAX_GPU_RUNG = 2
-
-export const createLaunchGuard = (folder) => {
+export const createLaunchGuard = ({ folder, maxRung, electronVersion }) => {
   const pendingPath = path.join(folder, 'launch-pending.json')
   const fallbackPath = path.join(folder, 'gpu-fallback.json')
 
-  const begin = () => {
-    const failedStarts = readJson(pendingPath)?.attempts ?? 0
-    const keptRung = readJson(fallbackPath)?.rung ?? 0
-    const rung = Math.min(MAX_GPU_RUNG, Math.max(keptRung, failedStarts))
-    writeJson(pendingPath, { attempts: failedStarts + 1, rung })
-    return { failedStarts, keptRung, rung }
+  const keptRung = () => {
+    const kept = readJson(fallbackPath)
+    return kept?.electron === electronVersion ? kept.rung ?? 0 : 0
   }
 
-  const keepRung = (rung) => {
-    const keptRung = readJson(fallbackPath)?.rung ?? 0
-    writeJson(fallbackPath, { rung: Math.min(MAX_GPU_RUNG, Math.max(keptRung, rung)) })
+  const begin = () => {
+    const pending = readJson(pendingPath)
+    const survived = pending?.electron === electronVersion
+    const failedStarts = survived ? (pending.failedStarts ?? 0) + 1 : 0
+    const rung = Math.min(maxRung, keptRung())
+    writeJson(pendingPath, { rung, failedStarts, electron: electronVersion, startedAt: new Date().toISOString() })
+    return { rung, failedStarts, atLastRung: rung === maxRung }
   }
+
+  const keepRung = (rung) => writeJson(fallbackPath, { rung: Math.min(maxRung, rung), electron: electronVersion })
+
+  const clearPending = () => fs.rmSync(pendingPath, { force: true })
 
   const succeed = (rung) => {
-    fs.rmSync(pendingPath, { force: true })
-    if (rung > 0) keepRung(rung)
+    clearPending()
+    if (rung !== keptRung()) keepRung(rung)
   }
 
-  return { begin, keepRung, succeed }
+  return { begin, keepRung, clearPending, succeed }
 }
-
-export const describeRung = (rung) => [
-  'normal graphics',
-  'hardware acceleration off, GPU sandbox off',
-  'hardware acceleration off, GPU sandbox off, GPU in the main process'
-][rung]
 
 const readJson = (filePath) => {
   try {

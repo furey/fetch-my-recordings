@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, crashReporter, dialog, ipcMain, nativeTheme, powerSaveBlocker, session, shell } from 'electron'
+import { app, BrowserWindow, Menu, crashReporter, dialog, ipcMain, nativeTheme, powerMonitor, powerSaveBlocker, session, shell } from 'electron'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -10,7 +10,8 @@ import { startSave } from './saving.js'
 import { createSettings } from './settings.js'
 import { createHistory, savedStates } from './history.js'
 import { createStartupLog, describeError } from './startup-log.js'
-import { MAX_GPU_RUNG, createLaunchGuard, describeRung } from './launch-guard.js'
+import { createLaunchGuard } from './launch-guard.js'
+import { grantSandboxReadAccess } from './install-access.js'
 
 const APP_REPOSITORY_URL = 'https://github.com/furey/fetch-my-recordings'
 const FETCHTV_REPOSITORY_URL = 'https://github.com/furey/fetchtv'
@@ -18,9 +19,11 @@ const EXTERNAL_LINKS = {
   vlc: 'https://www.videolan.org/vlc/',
   freetvarr: 'https://furey.github.io/freetvarr/'
 }
+const ISSUES_URL = 'https://github.com/furey/fetch-my-recordings/issues'
 const SHOW_FALLBACK_MS = 10000
+const WATCHDOG_MS = 30000
 const ERR_ABORTED = -3
-const distDir =path.dirname(fileURLToPath(import.meta.url))
+const distDir = path.dirname(fileURLToPath(import.meta.url))
 const rendererPage = path.join(distDir, 'renderer', 'index.html')
 const rendererUrl = pathToFileURL(rendererPage).href
 
@@ -36,22 +39,42 @@ const state = {
   launchGuard: null,
   gpuRung: 0,
   windowShown: false,
-  dialogOpen: false,
+  startSettled: false,
+  dialogQueue: Promise.resolve(),
+  queuedDialogs: new Set(),
   quitting: false,
   failing: false
 }
+
+const GPU_FALLBACKS = [
+  { name: 'normal graphics', apply: () => null },
+  {
+    name: 'hardware acceleration off',
+    apply: () => {
+      app.disableHardwareAcceleration()
+    }
+  },
+  {
+    name: 'hardware acceleration off, GPU sandbox off',
+    apply: () => {
+      app.disableHardwareAcceleration()
+      app.commandLine.appendSwitch('disable-gpu-sandbox')
+    }
+  }
+]
 
 const main = () => {
   if (process.env.FETCHTV_USER_DATA) app.setPath('userData', process.env.FETCHTV_USER_DATA)
   state.log = createStartupLog(path.join(app.getPath('userData'), 'logs'))
   catchFatalErrors()
-  crashReporter.start({ uploadToServer: false })
   if (!app.requestSingleInstanceLock()) {
     state.log.write('Another copy is already running. Asked it to show its window, then quit.')
     return app.quit()
   }
+  crashReporter.start({ uploadToServer: false })
   state.log.write(`Starting version ${APP_VERSION} on ${process.platform} ${process.arch} (${os.release()}), Electron ${process.versions.electron}.`)
   prepareGpuFallback()
+  startWatchdog()
   app.enableSandbox()
   app.setAboutPanelOptions({
     applicationName: 'Fetch My Recordings',
@@ -61,7 +84,7 @@ const main = () => {
   })
   app.on('second-instance', focusWindow)
   app.on('window-all-closed', () => app.quit())
-  app.on('before-quit', () => { state.quitting = true })
+  app.on('before-quit', handleBeforeQuit)
   app.on('will-quit', () => {
     state.log.write('Quitting.')
     syncCleanupLockFiles()
@@ -74,6 +97,7 @@ const main = () => {
 const startSafely = () => {
   try {
     state.log.write('Electron is ready. Opening the window.')
+    powerMonitor.on('shutdown', () => forgetStartBeforeShow('The computer is shutting down'))
     start()
   } catch (error) {
     failFatally({ error, origin: 'start' })
@@ -87,6 +111,7 @@ const start = () => {
   blockRemoteRequests()
   Menu.setApplicationMenu(buildMenu())
   registerIpc({ settings, history: createHistory(app.getPath('userData')) })
+  if (activeFault() === 'no-window') return state.log.write('Test fault: no-window.')
   state.window = createWindow()
 }
 
@@ -112,6 +137,7 @@ const createWindow = () => {
   const fault = activeFault()
   if (fault !== 'no-ready') window.once('ready-to-show', () => showWhenReady(window))
   window.on('close', (event) => confirmCloseDuringSave({ event, window }))
+  window.on('session-end', () => forgetStartBeforeShow('Windows is ending the session'))
   window.on('unresponsive', () => handleUnresponsive(window))
   window.on('responsive', () => state.log.write('The window is responding again.'))
   window.webContents.on('render-process-gone', (_event, details) => handleRendererGone({ window, details }))
@@ -128,15 +154,20 @@ const loadRenderer = (window) => window.loadFile(rendererPage).catch(() => null)
 const showWhenReady = (window) => {
   if (window.isDestroyed()) return
   window.show()
+  const firstShow = !state.windowShown
   state.windowShown = true
+  state.startSettled = true
   state.launchGuard.succeed(state.gpuRung)
-  state.log.write(`Window shown${state.gpuRung ? ` with GPU fallback rung ${state.gpuRung}` : ''}.`)
+  state.log.write(`Window shown${state.gpuRung ? ` with graphics fallback ${state.gpuRung}` : ''}.`)
+  if (!firstShow) state.log.write(`The window became ready after the fallback, so graphics fallback ${state.gpuRung} works.`)
 }
 
 const showIfStillHidden = (window) => {
   if (window.isDestroyed() || window.isVisible()) return
   revealWindow(window)
+  settleStart()
   state.log.write(`The window was not ready after ${SHOW_FALLBACK_MS / 1000} s. Showed it anyway.`)
+  planNextRung('The window did not draw in time')
 }
 
 const revealWindow = (window) => {
@@ -146,25 +177,52 @@ const revealWindow = (window) => {
   state.windowShown = true
 }
 
-const catchFatalErrors = () => {
-  process.on('uncaughtException', (error) => failFatally({ error, origin: 'uncaught exception' }))
-  process.on('unhandledRejection', (reason) => handleUnhandledRejection(reason))
+const startWatchdog = () => {
+  const waitMs = watchdogMs()
+  const timer = setTimeout(() => {
+    if (state.windowShown || state.quitting || state.failing) return
+    state.failing = true
+    state.log.write(`No window after ${waitMs / 1000} s. Closing so the next start can try again.`)
+    showErrorBox({
+      title: 'Fetch My Recordings did not open',
+      content: `The window did not open within ${waitMs / 1000} seconds. Open the app again. It starts with safer graphics settings.\n\nIf it still does not open, report it at ${ISSUES_URL} and attach the log file:\n${state.log.filePath}`
+    })
+    exitApp(1)
+  }, waitMs)
+  timer.unref?.()
 }
 
-const handleUnhandledRejection = (reason) => {
-  if (!state.windowShown) return failFatally({ error: reason, origin: 'unhandled rejection during start' })
-  state.log.write(`Unhandled rejection (kept running): ${describeError(reason)}`)
+const watchdogMs = () => (isTestRun() && Number(process.env.FMR_TEST_WATCHDOG_MS)) || WATCHDOG_MS
+
+const catchFatalErrors = () => {
+  process.on('uncaughtException', (error) => handleUncaught({ error, origin: 'uncaught exception' }))
+  process.on('unhandledRejection', (reason) => handleUncaught({ error: reason, origin: 'unhandled rejection' }))
+}
+
+const handleUncaught = ({ error, origin }) => {
+  if (!state.windowShown) return failFatally({ error, origin: `${origin} during start` })
+  state.log.write(`Kept running after an ${origin}: ${describeError(error)}`)
 }
 
 const failFatally = ({ error, origin }) => {
   if (state.failing) return
   state.failing = true
   state.log.write(`Fatal error (${origin}): ${describeError(error)}`)
+  settleStart()
   showErrorBox({
     title: 'Fetch My Recordings has to close',
-    content: `Something went wrong: ${error?.message ?? error}\n\nThe details are in this log file:\n${state.log.filePath}`
+    content: `Something went wrong: ${error?.message ?? error}\n\nIf it happens again, report it at ${ISSUES_URL} and attach the log file:\n${state.log.filePath}`
   })
-  app.exit(1)
+  exitApp(1)
+}
+
+const exitApp = (code) => {
+  try {
+    syncCleanupLockFiles()
+  } catch (error) {
+    state.log.write(`Could not clean up lock files: ${describeError(error)}`)
+  }
+  app.exit(code)
 }
 
 const showErrorBox = ({ title, content }) => {
@@ -178,29 +236,80 @@ const showErrorBox = ({ title, content }) => {
 }
 
 const prepareGpuFallback = () => {
-  state.launchGuard = createLaunchGuard(app.getPath('userData'))
-  const { failedStarts, keptRung, rung } = state.launchGuard.begin()
+  state.launchGuard = createLaunchGuard({
+    folder: app.getPath('userData'),
+    maxRung: GPU_FALLBACKS.length - 1,
+    electronVersion: process.versions.electron
+  })
+  const { rung, failedStarts, atLastRung } = state.launchGuard.begin()
   state.gpuRung = rung
-  if (failedStarts > 0) state.log.write(`The last ${failedStarts} start(s) did not show a window.`)
+  if (failedStarts > 0) state.log.write(`The last ${failedStarts} start(s) closed before the window showed.`)
+  repairInstallFolderAccess({ force: failedStarts > 0 })
+  if (failedStarts >= 2 || (failedStarts > 0 && atLastRung)) warnRepeatedFailedStarts(failedStarts)
   if (rung === 0) return
-  const source = keptRung === rung ? 'kept from an earlier start' : 'after a failed start'
-  state.log.write(`Using GPU fallback rung ${rung} (${describeRung(rung)}), ${source}.`)
-  app.disableHardwareAcceleration()
-  app.commandLine.appendSwitch('disable-gpu-sandbox')
-  if (rung >= 2) app.commandLine.appendSwitch('in-process-gpu')
+  state.log.write(`Using graphics fallback ${rung} (${GPU_FALLBACKS[rung].name}), kept from an earlier start.`)
+  GPU_FALLBACKS[rung].apply()
+}
+
+const repairInstallFolderAccess = ({ force }) => {
+  if (process.platform !== 'win32' || !app.isPackaged) return
+  const result = grantSandboxReadAccess({
+    folder: path.dirname(process.execPath),
+    markerPath: path.join(app.getPath('userData'), 'install-access.json'),
+    version: APP_VERSION,
+    force
+  })
+  if (result.skipped) return
+  state.log.write(result.ok
+    ? 'Gave sandboxed processes read access to the install folder (ALL APPLICATION PACKAGES).'
+    : `Could not give sandboxed processes read access to the install folder: ${result.error}`)
+}
+
+const warnRepeatedFailedStarts = (failedStarts) => {
+  state.log.write('Showing an error box: the window has not opened for several starts.')
+  showErrorBox({
+    title: 'Fetch My Recordings could not open its window',
+    content: `The app closed before its window opened the last ${failedStarts} times. It tries again now with its safest settings.\n\nIf no window opens, report it at ${ISSUES_URL} and attach the log file:\n${state.log.filePath}`
+  })
+}
+
+const planNextRung = (reason) => {
+  const nextRung = state.gpuRung + 1
+  if (nextRung >= GPU_FALLBACKS.length) {
+    state.log.write(`${reason}. Graphics fallback is already at the last step.`)
+    return false
+  }
+  state.launchGuard.keepRung(nextRung)
+  state.log.write(`${reason}. The next start uses graphics fallback ${nextRung} (${GPU_FALLBACKS[nextRung].name}).`)
+  return true
+}
+
+const forgetStartBeforeShow = (reason) => {
+  if (state.startSettled || !state.launchGuard) return
+  settleStart()
+  state.log.write(`${reason} before the window showed. This start does not count as failed.`)
+}
+
+const settleStart = () => {
+  state.startSettled = true
+  state.launchGuard?.clearPending()
+}
+
+const handleBeforeQuit = () => {
+  state.quitting = true
+  if (!state.failing) forgetStartBeforeShow('Quit')
 }
 
 const handleChildProcessGone = (details) => {
   if (details.type !== 'GPU') return
   state.log.write(`The GPU process stopped: ${details.reason}, exit code ${details.exitCode}.`)
-  if (details.reason === 'clean-exit' || state.quitting) return
-  if (state.gpuRung >= MAX_GPU_RUNG) return state.log.write('GPU fallback is already at the last rung. Not restarting.')
-  const nextRung = state.gpuRung + 1
-  state.launchGuard.keepRung(nextRung)
-  if (state.activeSave) return state.log.write(`Kept GPU fallback rung ${nextRung} for the next start. Not restarting during a save.`)
-  state.log.write(`Restarting with GPU fallback rung ${nextRung} (${describeRung(nextRung)}).`)
+  if (details.reason === 'clean-exit' || state.quitting || state.failing) return
+  if (state.windowShown) return state.log.write('The window is already open. Left the GPU process to restart by itself.')
+  if (!planNextRung('The GPU process stopped before the window showed')) return
+  settleStart()
+  state.log.write('Restarting the app.')
   if (!isTestRun()) app.relaunch()
-  app.exit(0)
+  exitApp(0)
 }
 
 const handleRendererGone = ({ window, details }) => {
@@ -244,39 +353,43 @@ const handleUnresponsive = async (window) => {
   if (answer === 'Quit') quitNow()
 }
 
-const askUser = async ({ message, detail, buttons }) => {
-  if (state.dialogOpen) {
-    state.log.write(`Dialog skipped, one is already open: ${message}`)
-    return null
+const askUser = ({ message, detail, buttons }) => {
+  if (state.queuedDialogs.has(message)) {
+    state.log.write(`Dialog already waiting: ${message}`)
+    return Promise.resolve(null)
   }
-  state.dialogOpen = true
+  state.queuedDialogs.add(message)
+  const answer = state.dialogQueue.then(() => showDialog({ message, detail, buttons }))
+  state.dialogQueue = answer.catch(() => null)
+  return answer.finally(() => state.queuedDialogs.delete(message))
+}
+
+const showDialog = async ({ message, detail, buttons }) => {
+  if (state.quitting) return null
   state.log.write(`Dialog shown: ${message} [${buttons.join(' / ')}]`)
-  try {
-    const response = isTestRun()
-      ? Number(process.env.FMR_TEST_DIALOG_ANSWER ?? 0)
-      : (await dialog.showMessageBox({
-          type: 'warning',
-          title: 'Fetch My Recordings',
-          message,
-          detail: `${detail}\n\nThe details are in the log folder:\n${state.log.folder}`,
-          buttons,
-          defaultId: 0,
-          cancelId: buttons.length - 1,
-          noLink: true
-        })).response
-    state.log.write(`Dialog answer: ${buttons[response]}.`)
-    return buttons[response]
-  } finally {
-    state.dialogOpen = false
-  }
+  const response = isTestRun()
+    ? Number(process.env.FMR_TEST_DIALOG_ANSWER ?? 0)
+    : (await dialog.showMessageBox({
+        type: 'warning',
+        title: 'Fetch My Recordings',
+        message,
+        detail: `${detail}\n\nThe details are in the log folder:\n${state.log.folder}`,
+        buttons,
+        defaultId: 0,
+        cancelId: buttons.length - 1,
+        noLink: true
+      })).response
+  state.log.write(`Dialog answer: ${buttons[response]}.`)
+  return buttons[response]
 }
 
 const quitNow = () => {
+  state.activeSave?.cancel()
   BrowserWindow.getAllWindows().forEach(window => window.destroy())
   app.quit()
 }
 
-const isTestRun = () => process.env.FMR_TEST === '1'
+const isTestRun = () => process.env.FMR_TEST === '1' && (!app.isPackaged || Boolean(process.env.CI))
 
 const activeFault = () => isTestRun() ? process.env.FMR_FAULT ?? '' : ''
 
@@ -487,7 +600,7 @@ const retryDelaysFromEnv = () => {
 
 const focusWindow = () => {
   state.log.write('Another start asked for the window.')
-  if (!app.isReady() || state.failing) return
+  if (!app.isReady() || state.failing || state.quitting) return
   if (!state.window || state.window.isDestroyed()) {
     state.window = createWindow()
     return

@@ -72,7 +72,7 @@ All versions are on the [releases page](https://github.com/furey/fetch-my-record
 ## Requirements
 
 - **Mac**: macOS 13 Ventura or later, with an Apple chip or an Intel chip.
-- **Windows**: Windows 10 or later, 64-bit.
+- **Windows**: Windows 10 or later, 64-bit (x64).
 - **Linux**: a 64-bit computer (x86_64 or ARM64) with a major distribution, such as Ubuntu, Fedora, or Debian, in a version that still gets updates.
 
 On an older Mac, use the command-line tool [`fetchtv`](https://github.com/furey/fetchtv) instead. On macOS 12 Monterey, it needs Node.js 22, because Node.js 24 and later need macOS 13.5.
@@ -267,9 +267,16 @@ If the app still does not open on Ubuntu 24.04 or later, start it from a termina
 
 ### If the app does not open
 
-On some computers, often ones with extra security software, the app's graphics process cannot start. When that happens, the app restarts itself with safer graphics settings. If you still see no window, open the app again. Each failed start turns on more of the safer settings, and the app keeps them after one works.
+If the app shows nothing, check that it is not still running in the background, then open it again:
 
-If the app still does not open, [open an issue](https://github.com/furey/fetch-my-recordings/issues) and attach the file `main.log` from the log folder:
+- On Windows, press **Ctrl+Shift+Esc** to open Task Manager, select **Fetch My Recordings**, and click **End task**.
+- On a Mac, open **Activity Monitor**, select **Fetch My Recordings**, and click the **Stop** button in the toolbar, then **Quit**.
+
+On some computers, often ones with extra security software, the app's graphics process cannot start. When that happens before the window shows, the app restarts itself with safer graphics settings. There are two fallback steps: first it turns off hardware acceleration, then it also turns off the sandbox for the graphics process. The app keeps the step that worked until an app update brings a new version of Electron, the framework the app is built on.
+
+On Windows, the app also gives its sandboxed processes read access to its install folder. This fixes a folder permission problem that other apps can leave behind ([electron/electron#51761](https://github.com/electron/electron/issues/51761)).
+
+If the app still does not open, it shows a message with the log file. [Open an issue](https://github.com/furey/fetch-my-recordings/issues) and attach the file `main.log` from the log folder:
 
 | Computer | Log folder                                               |
 | -------- | -------------------------------------------------------- |
