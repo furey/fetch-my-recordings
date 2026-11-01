@@ -119,6 +119,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
         run: |
+          set -euo pipefail
           for attempt in $(seq 1 30); do
             if gh release view "$TAG" > /dev/null 2>&1; then
               gh release upload "$TAG" \
@@ -129,10 +130,11 @@ jobs:
                 builds/Fetch-My-Recordings-Linux.AppImage \
                 builds/Fetch-My-Recordings-Linux-ARM.AppImage \
                 --clobber
+              gh release edit "$TAG" --draft=false --latest
               exit 0
             fi
             echo "No release for $TAG yet. Waiting a minute (attempt $attempt of 30)."
             sleep 60
           done
-          echo "No release for $TAG after 30 minutes. Create it, then re-run this job."
+          echo "No release for $TAG after 30 minutes. Create it as a draft, then re-run this job."
           exit 1
