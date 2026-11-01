@@ -1403,10 +1403,29 @@ body.is-hidden .mark.is-animated .mark-chips {
   opacity: 1;
 }
 
+.row-title, .box-name, .folder-name, .step-label, .setting-title, .status, .summary, .row-side, .overall-text, .row-reveal {
+  text-wrap: balance;
+}
+
+.row-detail, .folder-parent, .box-address, #about-line, .space, .example, .notice, .drawer-text {
+  text-wrap: pretty;
+}
+
 h1, h2, h3, h4, button, label, figcaption, dt, .btn, [role="tab"] {
   text-wrap: balance;
 }
 
 p, li, dd, td {
   text-wrap: pretty;
+}
+
+@media (max-width: 760px) {
+  .step-label {
+    display: block;
+    text-wrap: nowrap;
+  }
+
+  .steps li:not([aria-current="step"]) .step-label {
+    visibility: hidden;
+  }
 }
