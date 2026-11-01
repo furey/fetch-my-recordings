@@ -5,7 +5,9 @@ const api = window.fetchtv
 const state = {
   info: null,
   step: 0,
-  pendingSearch: null,
+  visit: 0,
+  background: null,
+  folderCheck: 0,
   boxes: [],
   box: null,
   shows: [],
@@ -14,8 +16,15 @@ const state = {
   folder: '',
   forPlex: false,
   folderInfo: null,
-  save: null
+  save: null,
+  saving: false,
+  saveRun: null,
+  leavingForStart: false,
+  listIsStale: false
 }
+
+const MINIMUM_BUSY_MS = 900
+const BACKGROUND_SEARCH_FRESH_MS = 10000
 
 const start = async () => {
   state.info = await api.appInfo()
@@ -25,11 +34,16 @@ const start = async () => {
   document.getElementById('footer-github').replaceWith(githubLink())
   setUpSoundToggle(state.info.settings.sound !== false)
   setUpDialog()
+  setUpHeader()
   pauseWhenHidden()
   api.onListProgress(showListProgress)
   api.onSaveProgress(updateSaveProgress)
   api.onSaveResult(updateSaveResult)
-  state.pendingSearch = api.findBoxes()
+  showWelcome()
+}
+
+const showWelcome = () => {
+  startBackgroundSearch()
   showScreen(0, welcomeScreen())
 }
 
@@ -52,15 +66,46 @@ const begin = () => {
   searchForBoxes({ autoPick: true })
 }
 
-const searchForBoxes = async ({ autoPick }) => {
-  showScreen(1, searchingScreen())
-  const search = state.pendingSearch ?? api.findBoxes()
-  state.pendingSearch = null
-  const { boxes } = await search
+const searchForBoxes = async ({ autoPick, wholeNetwork = false }) => {
+  const visit = showScreen(1, searchingScreen())
+  const boxes = await withMinimumDuration(findBoxesWithRetry({ wholeNetwork }))
+  if (!isCurrentVisit(visit)) return
   state.boxes = boxes
   sounds.play(boxes.length === 0 ? 'failed' : 'found')
   if (autoPick && boxes.length === 1) return useBox(boxes[0])
   showScreen(1, boxes.length === 0 ? notFoundScreen() : chooseBoxScreen())
+}
+
+const findBoxesWithRetry = async ({ wholeNetwork }) => {
+  const first = (wholeNetwork ? null : await takeBackgroundSearch()) ?? await api.findBoxes({ wholeNetwork })
+  if (first.boxes.length > 0) return first.boxes
+  const second = await api.findBoxes({ wholeNetwork })
+  return second.boxes
+}
+
+const startBackgroundSearch = () => {
+  const search = { finishedAt: null, boxes: [] }
+  search.promise = api.findBoxes().then((result) => {
+    search.finishedAt = Date.now()
+    search.boxes = result.boxes
+    return result
+  })
+  state.background = search
+}
+
+const takeBackgroundSearch = () => {
+  const search = state.background
+  state.background = null
+  if (!search) return null
+  if (search.finishedAt === null) return search.promise
+  const isFresh = Date.now() - search.finishedAt <= BACKGROUND_SEARCH_FRESH_MS
+  return search.boxes.length > 0 && isFresh ? search.promise : null
+}
+
+const chooseBox = (box) => {
+  const hasCurrentList = state.box?.id === box.id && state.shows.length > 0 && !state.listIsStale
+  if (hasCurrentList) return showScreen(2, recordingsScreen())
+  useBox(box)
 }
 
 const useBox = async (box) => {
@@ -68,8 +113,10 @@ const useBox = async (box) => {
   state.shows = []
   state.selected = new Set()
   state.open = new Set()
-  showScreen(2, loadingListScreen())
-  const result = await api.listRecordings({ boxId: box.id })
+  state.listIsStale = false
+  const visit = showScreen(2, loadingListScreen())
+  const result = await withMinimumDuration(api.listRecordings({ boxId: box.id }))
+  if (!isCurrentVisit(visit)) return
   if (result.error) {
     sounds.play('failed')
     return showScreen(2, listFailedScreen())
@@ -85,7 +132,9 @@ const connectByAddress = async ({ address, form }) => {
   message.textContent = ''
   button.disabled = true
   button.textContent = 'Connecting…'
-  const result = await api.connectToBox({ address })
+  const visit = state.visit
+  const result = await withMinimumDuration(api.connectToBox({ address }))
+  if (!isCurrentVisit(visit)) return
   button.disabled = false
   button.textContent = 'Connect'
   if (result.box) {
@@ -104,9 +153,11 @@ const goToFolderStep = async () => {
 }
 
 const refreshFolderInfo = async () => {
+  const check = ++state.folderCheck
   state.folderInfo = null
   renderFolderInfo()
-  const info = await api.describeFolder({ folder: state.folder, episodeIds: [...state.selected] })
+  const info = await withMinimumDuration(api.describeFolder({ folder: state.folder, episodeIds: [...state.selected] }))
+  if (check !== state.folderCheck) return
   state.folderInfo = info.error ? null : info
   renderFolderInfo()
 }
@@ -128,12 +179,52 @@ const beginSave = async () => {
     startedAt: Date.now(),
     summary: null
   }
-  showScreen(4, savingScreen())
-  const result = await api.startSave({ folder: state.folder, forPlex: state.forPlex, episodeIds: order.map(episode => episode.id) })
+  state.saving = true
+  const visit = showScreen(4, savingScreen())
+  state.saveRun = withMinimumDuration(api.startSave({ folder: state.folder, forPlex: state.forPlex, episodeIds: order.map(episode => episode.id) }))
+  const result = await state.saveRun
+  state.saving = false
+  state.listIsStale = true
   state.save.summary = result.summary ?? null
   state.save.error = result.error ?? null
+  if (state.leavingForStart || !isCurrentVisit(visit)) return
   playFinishSound(state.save.summary)
   showScreen(4, finishedScreen())
+}
+
+const goToStart = () => {
+  if (state.saving) return confirmStopForStart()
+  showWelcome()
+}
+
+const confirmStopForStart = () => {
+  const stopButton = h('button', { type: 'button', className: 'btn stop', id: 'stop-and-start' }, 'Stop and go to start')
+  stopButton.addEventListener('click', () => stopAndGoToStart(stopButton))
+  openInfo({
+    title: 'Recordings are still saving',
+    body: [h('p', {}, 'If you stop now, a recording that is part way keeps what it has. Save the same recordings to the same folder next time to carry on from there.')],
+    footer: [
+      h('button', { type: 'button', className: 'btn quiet', id: 'keep-saving', onclick: closeInfo }, 'Keep saving'),
+      stopButton
+    ]
+  })
+}
+
+const stopAndGoToStart = async (button) => {
+  button.disabled = true
+  button.textContent = 'Stopping…'
+  state.leavingForStart = true
+  await api.cancelSave()
+  await state.saveRun
+  state.leavingForStart = false
+  closeInfo()
+  showWelcome()
+}
+
+const goBackToStep = (step) => {
+  if (step === 1) return showScreen(1, chooseBoxScreen())
+  if (step === 2) return state.listIsStale || state.shows.length === 0 ? useBox(state.box) : showScreen(2, recordingsScreen())
+  if (step === 3) return goToFolderStep()
 }
 
 const playFinishSound = (summary) => {
@@ -180,6 +271,7 @@ const openAbout = () => openInfo({
 const searchingScreen = () => ({
   content: [
     h('h1', {}, 'Looking for your Fetch box'),
+    h('p', { className: 'meta', id: 'search-status' }, 'Searching your home network…'),
     h('div', { className: 'progress is-busy searching', role: 'progressbar', 'aria-label': 'Searching' }, h('span', {}))
   ]
 })
@@ -200,20 +292,23 @@ const notFoundInfo = () => openInfo({
     h('ul', { className: 'checks' },
       h('li', {}, 'the Fetch box is turned on'),
       h('li', {}, 'this computer is on the same Wi-Fi or home network as the Fetch box')),
-    h('p', {}, 'Then search again, or type the IP address of the box.')
+    h('p', {}, 'Then search again, or type the IP address of the box.'),
+    h('p', { id: 'firewall-tip' }, 'If a firewall app (such as Little Snitch) or your computer asked to allow Fetch My Recordings on your local network, allow it, then choose Search again.')
   ]
 })
 
+const boxesToChoose = () => [...new Map([...state.boxes, state.box].filter(Boolean).map(box => [box.id, box])).values()]
+
 const chooseBoxScreen = () => ({
   content: [
-    h('h1', {}, state.boxes.length > 1 ? 'Choose your Fetch box' : 'Fetch box found'),
-    h('ul', { className: 'table' }, ...state.boxes.map(box => h('li', { className: 'row' },
-      h('button', { type: 'button', className: 'choice', onclick: () => useBox(box) },
+    h('h1', {}, boxesToChoose().length > 1 ? 'Choose your Fetch box' : 'Fetch box found'),
+    h('ul', { className: 'table' }, ...boxesToChoose().map(box => h('li', { className: 'row' },
+      h('button', { type: 'button', className: 'choice', onclick: () => chooseBox(box) },
         h('span', { className: 'box-dot' }),
         h('span', { className: 'row-text' },
           h('span', { className: 'row-title' }, box.name),
           h('span', { className: 'row-detail mono' }, box.address)))))),
-    h('p', {}, h('button', { type: 'button', className: 'link', onclick: () => searchForBoxes({ autoPick: false }) }, 'Search again')),
+    h('p', {}, h('button', { type: 'button', className: 'link', onclick: () => searchForBoxes({ autoPick: false, wholeNetwork: true }) }, 'Search again')),
     addressForm()
   ]
 })
@@ -294,7 +389,7 @@ const boxCard = () => h('div', { className: 'box-card', id: 'box-card' },
   h('span', { className: 'box-text' },
     h('span', { className: 'box-name' }, state.box.name),
     h('span', { className: 'box-address mono' }, state.box.address)),
-  h('button', { type: 'button', className: 'link', onclick: () => searchForBoxes({ autoPick: false }) }, 'Change'))
+  h('button', { type: 'button', className: 'link', onclick: () => searchForBoxes({ autoPick: false, wholeNetwork: true }) }, 'Change'))
 
 const recordingsScreen = () => {
   const summary = h('span', { className: 'summary', id: 'selection-summary' })
@@ -318,7 +413,7 @@ const recordingsScreen = () => {
     ],
     actions: [
       summary,
-      h('button', { type: 'button', className: 'btn quiet', onclick: () => searchForBoxes({ autoPick: false }) }, 'Back'),
+      h('button', { type: 'button', className: 'btn quiet', onclick: () => showScreen(1, chooseBoxScreen()) }, 'Back'),
       next
     ]
   }
@@ -725,7 +820,7 @@ const whatNowBody = (id) => {
 }
 
 const saveAgainWithPlexNames = () => {
-  document.getElementById('info-dialog').close()
+  closeInfo()
   state.forPlex = true
   goToFolderStep()
 }
@@ -815,7 +910,7 @@ const resultRow = (episode) => {
 }
 
 const saveAgainFromDialog = () => {
-  document.getElementById('info-dialog').close()
+  closeInfo()
   beginSave()
 }
 
@@ -882,6 +977,40 @@ const setUpDialog = () => {
   document.getElementById('info-close').addEventListener('click', () => dialog.close())
 }
 
+const closeInfo = () => document.getElementById('info-dialog').close()
+
+const setUpHeader = () => {
+  document.getElementById('home').addEventListener('click', goToStart)
+  document.querySelectorAll('#steps .step').forEach(item => {
+    const step = Number(item.closest('li').dataset.step)
+    const goBack = () => { if (item.getAttribute('role') === 'button') goBackToStep(step) }
+    item.addEventListener('click', goBack)
+    item.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return
+      event.preventDefault()
+      goBack()
+    })
+  })
+}
+
+const refreshSteps = () => document.querySelectorAll('#steps li').forEach(item => {
+  const itemStep = Number(item.dataset.step)
+  const step = item.querySelector('.step')
+  item.classList.toggle('is-done', itemStep < state.step)
+  if (itemStep === state.step) item.setAttribute('aria-current', 'step')
+  else item.removeAttribute('aria-current')
+  const canGoBack = itemStep < state.step && !state.saving
+  if (canGoBack) {
+    step.setAttribute('role', 'button')
+    step.setAttribute('tabindex', '0')
+    step.setAttribute('aria-label', `Back to ${step.querySelector('.step-label').textContent}`)
+    return
+  }
+  step.removeAttribute('role')
+  step.removeAttribute('tabindex')
+  step.removeAttribute('aria-label')
+})
+
 const openInfo = ({ title, body, footer = [], variant = '' }) => {
   const dialog = document.getElementById('info-dialog')
   const bodyElement = document.getElementById('info-body')
@@ -905,13 +1034,9 @@ const updateScrollableBody = () => {
 
 const showScreen = (step, screen) => {
   state.step = step
+  state.visit += 1
   document.body.classList.toggle('is-welcome', step === 0)
-  document.querySelectorAll('#steps li').forEach(item => {
-    const itemStep = Number(item.dataset.step)
-    item.classList.toggle('is-done', itemStep < step)
-    if (itemStep === step) item.setAttribute('aria-current', 'step')
-    else item.removeAttribute('aria-current')
-  })
+  refreshSteps()
   const view = document.getElementById('view')
   view.replaceChildren(...screen.content.filter(Boolean))
   view.scrollTop = 0
@@ -919,7 +1044,17 @@ const showScreen = (step, screen) => {
   document.getElementById('actions').replaceChildren(...(actions.length ? [h('div', { className: 'actions-inner' }, ...actions)] : []))
   if (screen.after) screen.after()
   view.focus({ preventScroll: true })
+  return state.visit
 }
+
+const isCurrentVisit = (visit) => visit === state.visit
+
+const withMinimumDuration = async (work, ms = MINIMUM_BUSY_MS) => {
+  const [result] = await Promise.all([work, wait(ms)])
+  return result
+}
+
+const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
 const APP_REPOSITORY = 'furey/fetch-my-recordings'
 const APP_REPOSITORY_URL = `https://github.com/${APP_REPOSITORY}`

@@ -1,19 +1,27 @@
-import { discoverFetch, discoverFetchServers } from 'fetchtv'
+import { discoverFetch } from 'fetchtv'
+import { searchForFetchBoxes } from './discovery.js'
 
 export const FETCH_PORT = 49152
 
-export const findBoxes = async ({ rememberedAddress, searchNetwork = true }) => {
-  const [remembered, found] = await Promise.all([
-    rememberedAddress ? connectToAddress(rememberedAddress) : null,
-    searchNetwork ? searchNetworkTwice() : []
-  ])
+export const findBoxes = async ({
+  rememberedAddress,
+  searchNetwork = true,
+  wholeNetwork = false,
+  connect = connectToAddress,
+  search = searchForFetchBoxes
+}) => {
+  const remembered = rememberedAddress
+    ? await connect(rememberedAddress, { timeoutMs: REMEMBERED_TIMEOUT_MS })
+    : null
+  if (remembered && !wholeNetwork) return [remembered]
+  const found = searchNetwork ? await search() : []
   return uniqueByUrl([remembered, ...found].filter(Boolean))
 }
 
-export const connectToAddress = async (address) => {
+export const connectToAddress = async (address, { timeoutMs = CONNECT_TIMEOUT_MS } = {}) => {
   const target = parseBoxAddress(address)
   if (!target) return null
-  return withTimeout(discoverFetch(target), CONNECT_TIMEOUT_MS)
+  return withTimeout(discoverFetch(target), timeoutMs)
 }
 
 export const parseBoxAddress = (input) => {
@@ -44,14 +52,8 @@ const boxKeyOf = (location) => {
   return udn || new URL(location.url).host
 }
 
-const SEARCH_ROUND_MS = 4000
 const CONNECT_TIMEOUT_MS = 8000
-
-const searchNetworkTwice = async () => {
-  const first = await discoverFetchServers({ timeoutMs: SEARCH_ROUND_MS })
-  if (first.length > 0) return first
-  return discoverFetchServers({ timeoutMs: SEARCH_ROUND_MS })
-}
+const REMEMBERED_TIMEOUT_MS = 2500
 
 const uniqueByUrl = (locations) => [...new Map(locations.map(location => [location.url, location])).values()]
 

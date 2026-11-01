@@ -1,6 +1,7 @@
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
+import { createServer } from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -168,11 +169,13 @@ test('stop part way, then save again carries on from the partial file', async ()
     await page.getByRole('button', { name: 'Save', exact: true }).click()
     await page.getByRole('heading', { name: 'Saving', exact: true }).waitFor()
     await page.locator('.status', { hasText: / MB of / }).first().waitFor()
+    assert.equal(await page.locator('#steps [role="button"]').count(), 0)
     await page.waitForTimeout(1500)
     await capture({ app, page, name: '4-saving' })
     await page.getByRole('button', { name: 'Stop', exact: true }).click()
     await page.getByRole('heading', { name: 'Stopped', exact: true }).waitFor({ timeout: 30000 })
     await capture({ app, page, name: '4-stopped' })
+    assert.deepEqual(await stepButtonNames(page), ['Back to Find your Fetch box', 'Back to Choose recordings', 'Back to Choose a folder'])
 
     const files = await listFiles(saveFolder)
     assert.ok(files.some(file => file.endsWith('.ts.part')), `no partial file in ${files.join(', ')}`)
@@ -498,6 +501,251 @@ test('discovery: finds a Fetch box on the network without typing an address', { 
     await box.stop()
   }
 })
+
+test('step bar: completed steps go back and keep the box, ticks, and folder; current and later steps stay put', async () => {
+  const box = await startFakeBox()
+  const userData = await freshDir('user-data-steps')
+  const saveFolder = await freshDir('steps')
+  await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify({ lastAddress: box.address, lastFolder: saveFolder }))
+  const app = await launchApp({ userData })
+  try {
+    const page = await openApp(app)
+    await page.getByRole('heading', { name: 'Choose recordings' }).waitFor()
+    assert.deepEqual(await stepButtonNames(page), ['Back to Find your Fetch box'])
+    assert.equal(await cursorOf(page.locator('#steps li[data-step="1"] .step')), 'pointer')
+    assert.equal(await cursorOf(page.locator('#steps li[data-step="2"] .step')), 'auto')
+    await page.locator('li.show-row[data-show="Master Cook"] .row-main input[type="checkbox"]').first().uncheck()
+    const selection = await page.locator('#selection-summary').innerText()
+    await page.getByRole('button', { name: 'Next' }).click()
+    await page.getByRole('heading', { name: 'Choose a folder' }).waitFor()
+    await page.getByRole('switch', { name: 'Names for Plex, Jellyfin or Kodi' }).click()
+    assert.deepEqual(await stepButtonNames(page), ['Back to Find your Fetch box', 'Back to Choose recordings'])
+
+    await page.getByRole('button', { name: 'Back to Choose recordings' }).click()
+    await page.getByRole('heading', { name: 'Choose recordings' }).waitFor()
+    assert.equal(await page.locator('#selection-summary').innerText(), selection)
+
+    await page.getByRole('button', { name: 'Back to Find your Fetch box' }).focus()
+    await page.keyboard.press('Enter')
+    await page.getByRole('heading', { name: 'Fetch box found' }).waitFor()
+    assert.deepEqual(await stepButtonNames(page), [])
+    await page.getByRole('button', { name: /Test Fetch Box/ }).click()
+    await page.getByRole('heading', { name: 'Choose recordings' }).waitFor()
+    assert.equal(await page.locator('#selection-summary').innerText(), selection)
+    await page.getByRole('button', { name: 'Next' }).click()
+    await page.locator(`#folder-path[data-path="${cssString(saveFolder)}"]`).waitFor()
+    assert.equal(await page.getByRole('switch', { name: 'Names for Plex, Jellyfin or Kodi' }).getAttribute('aria-checked'), 'true')
+
+    await page.getByRole('button', { name: 'Back to start' }).click()
+    await page.getByRole('heading', { name: 'Fetch My Recordings' }).waitFor()
+    await page.getByRole('button', { name: 'Start', exact: true }).click()
+    await page.getByRole('heading', { name: 'Choose recordings' }).waitFor()
+  } finally {
+    await app.close()
+    await box.stop()
+  }
+})
+
+test('logo: goes back to start, and asks first while a save is running', async () => {
+  const box = await startFakeBox({
+    shows: [{ title: 'Master Cook', items: [{ title: 'S1 E1 - Auditions', size: 24 * MB, duration: '0:58:12' }] }],
+    quirks: { rangeNotSatisfiable: false },
+    bytesPerSecond: 2 * MB
+  })
+  const userData = await freshDir('user-data-logo')
+  const saveFolder = await freshDir('logo')
+  await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify({ lastAddress: box.address, lastFolder: saveFolder }))
+  const app = await launchApp({ userData })
+  try {
+    const page = await openApp(app)
+    await page.getByRole('heading', { name: 'Choose recordings' }).waitFor()
+    const home = page.getByRole('button', { name: 'Back to start' })
+    await home.hover()
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('.home-tip')).opacity === '1')
+    assert.equal(await page.locator('.home-tip').innerText(), 'Back to start')
+    await page.getByRole('button', { name: 'Next' }).click()
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await page.locator('.status', { hasText: / MB of / }).first().waitFor()
+
+    await home.click()
+    await page.locator('#info-dialog').getByRole('heading', { name: 'Recordings are still saving' }).waitFor()
+    await page.getByRole('button', { name: 'Keep saving' }).click()
+    await page.locator('#info-dialog').waitFor({ state: 'hidden' })
+    await page.getByRole('heading', { name: 'Saving', exact: true }).waitFor()
+
+    await home.click()
+    await page.getByRole('button', { name: 'Stop and go to start' }).click()
+    await page.getByRole('heading', { name: 'Fetch My Recordings' }).waitFor({ timeout: 30000 })
+    const files = await listFiles(saveFolder)
+    assert.ok(files.some(file => file.endsWith('.ts.part')), `no partial file in ${files.join(', ')}`)
+    assert.equal(files.some(file => file.endsWith('.lock')), false)
+  } finally {
+    await app.close()
+    await box.stop()
+  }
+})
+
+test('find your Fetch box: a background search that found nothing is redone, visibly, on arrival', async () => {
+  const silent = await startSilentBox()
+  const userData = await freshDir('user-data-arrival')
+  await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify({ lastAddress: silent.address }))
+  const app = await launchApp({ userData })
+  let box = null
+  try {
+    const page = await app.firstWindow()
+    await page.getByRole('heading', { name: 'Fetch My Recordings' }).waitFor()
+    await waitUntil(() => silent.requests.length >= 1)
+    await page.waitForTimeout(500)
+    await silent.stop()
+    box = await startFakeBox({ port: silent.port })
+    await page.getByRole('button', { name: 'Start', exact: true }).click()
+    await page.getByRole('heading', { name: 'Looking for your Fetch box' }).waitFor()
+    await page.locator('#search-status', { hasText: 'Searching your home network…' }).waitFor()
+    await capture({ app, page, name: '1-searching-on-arrival' })
+    await page.getByRole('heading', { name: 'Choose recordings' }).waitFor({ timeout: 20000 })
+    await page.locator('#box-card').getByText(box.address).waitFor()
+  } finally {
+    await app.close()
+    await silent.stop()
+    await box?.stop()
+  }
+})
+
+test('not found: searches twice before saying so, names the firewall, and every busy state shows for long enough', async () => {
+  const silent = await startSilentBox()
+  const box = await startFakeBox()
+  const userData = await freshDir('user-data-busy')
+  const saveFolder = await freshDir('busy')
+  await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify({ lastAddress: silent.address, lastFolder: saveFolder }))
+  const app = await launchApp({ userData })
+  try {
+    const page = await app.firstWindow()
+    await page.getByRole('heading', { name: 'Fetch My Recordings' }).waitFor()
+    await waitUntil(() => silent.requests.length >= 1)
+    await page.waitForTimeout(500)
+    await page.getByRole('button', { name: 'Start', exact: true }).click()
+    await page.getByRole('heading', { name: 'No Fetch box found' }).waitFor({ timeout: 20000 })
+    assert.equal(silent.requests.length, 3)
+    await page.getByRole('button', { name: 'More about: No Fetch box found' }).click()
+    await page.locator('#firewall-tip', { hasText: 'If a firewall app (such as Little Snitch) or your computer asked to allow Fetch My Recordings on your local network, allow it, then choose Search again.' }).waitFor()
+    await capture({ app, page, name: '1-not-found-info' })
+    await page.keyboard.press('Escape')
+
+    await recordScreens(page)
+    await page.getByRole('button', { name: 'Search again' }).click()
+    await page.getByRole('heading', { name: 'No Fetch box found' }).waitFor({ timeout: 20000 })
+    assert.equal(silent.requests.length, 5)
+    assertShownFor({ log: await screenLog(page), text: 'Looking for your Fetch box', ms: 800 })
+
+    await recordScreens(page)
+    await page.getByLabel('Or type its IP address').fill(box.address)
+    await page.getByRole('button', { name: 'Connect' }).click()
+    await page.getByRole('heading', { name: 'Choose recordings' }).waitFor()
+    const connecting = await screenLog(page)
+    assertShownFor({ log: connecting, text: 'Connecting…', ms: 800 })
+    assertShownFor({ log: connecting, text: 'Reading your recordings', ms: 800 })
+
+    await recordScreens(page)
+    await page.getByRole('button', { name: 'Next' }).click()
+    await page.locator('#folder-info', { hasText: 'Needs' }).waitFor()
+    assertShownFor({ log: await screenLog(page), text: 'Checking free space…', ms: 800 })
+
+    await stubFolderPicker({ app, folder: await freshDir('busy-other') })
+    await recordScreens(page)
+    await page.getByRole('button', { name: 'Change', exact: true }).click()
+    await page.locator('#folder-info', { hasText: 'Needs' }).waitFor()
+    assertShownFor({ log: await screenLog(page), text: 'Checking free space…', ms: 800 })
+
+    await recordScreens(page)
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await waitForFinish({ page, heading: 'All done', timeout: 60000 })
+    assertShownFor({ log: await screenLog(page), text: 'Saving', ms: 800 })
+  } finally {
+    await app.close()
+    await silent.stop()
+    await box.stop()
+  }
+})
+
+test('remembered box: a direct check of the saved address finds it without a network search', async () => {
+  const box = await startFakeBox()
+  const userData = await freshDir('user-data-remembered')
+  await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify({ lastAddress: box.address }))
+  const app = await launchApp({ userData, discovery: true })
+  try {
+    const page = await openApp(app)
+    const started = Date.now()
+    await page.getByRole('heading', { name: 'Reading your recordings' }).waitFor()
+    assert.ok(Date.now() - started < 2500, `finding the remembered box took ${Date.now() - started} ms, so a network search ran`)
+    await page.getByRole('heading', { name: 'Choose recordings' }).waitFor()
+    assert.ok(box.requests.some(request => request.method === 'GET' && request.url === '/MediaServer.xml'))
+  } finally {
+    await app.close()
+    await box.stop()
+  }
+})
+
+const startSilentBox = async ({ port = 0 } = {}) => {
+  const requests = []
+  const server = createServer((req, res) => {
+    requests.push(req.url)
+    res.writeHead(404)
+    res.end()
+  })
+  await new Promise(resolve => server.listen(port, '127.0.0.1', resolve))
+  const actualPort = server.address().port
+  return {
+    address: `127.0.0.1:${actualPort}`,
+    port: actualPort,
+    requests,
+    stop: async () => {
+      if (!server.listening) return
+      server.closeAllConnections()
+      await new Promise(resolve => server.close(resolve))
+    }
+  }
+}
+
+const waitUntil = async (condition, timeoutMs = 10000) => {
+  const deadline = Date.now() + timeoutMs
+  while (!condition()) {
+    if (Date.now() > deadline) throw new Error('Timed out waiting for a condition')
+    await new Promise(resolve => setTimeout(resolve, 50))
+  }
+}
+
+const stepButtonNames = (page) => page.locator('#steps [role="button"]').evaluateAll(steps => steps.map(step => step.getAttribute('aria-label')))
+
+const cursorOf = (locator) => locator.evaluate(element => getComputedStyle(element).cursor)
+
+const recordScreens = (page) => page.evaluate(() => {
+  window.screenObserver?.disconnect()
+  const snapshot = () => [
+    document.querySelector('#view h1')?.textContent ?? '',
+    document.querySelector('.address-form button[type="submit"]')?.textContent ?? '',
+    document.getElementById('folder-info')?.textContent ?? ''
+  ].join(' | ')
+  const log = []
+  const note = () => {
+    const text = snapshot()
+    if (log.at(-1)?.text !== text) log.push({ at: performance.now(), text })
+  }
+  window.screenLog = log
+  window.screenObserver = new MutationObserver(note)
+  window.screenObserver.observe(document.body, { subtree: true, childList: true, characterData: true })
+  note()
+})
+
+const screenLog = (page) => page.evaluate(() => window.screenLog)
+
+const assertShownFor = ({ log, text, ms }) => {
+  const start = log.findIndex(entry => entry.text.includes(text))
+  assert.ok(start >= 0, `"${text}" never showed in ${JSON.stringify(log.map(entry => entry.text))}`)
+  const end = log.findIndex((entry, index) => index > start && !entry.text.includes(text))
+  assert.ok(end > start, `"${text}" never went away`)
+  const shown = log[end].at - log[start].at
+  assert.ok(shown >= ms, `"${text}" showed for ${Math.round(shown)} ms, under ${ms} ms`)
+}
 
 const launchApp = async ({ userData, discovery = false }) => {
   const env = {
