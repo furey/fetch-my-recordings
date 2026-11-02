@@ -371,7 +371,7 @@ The Freetvarr guide's [Converting recordings to MP4](https://furey.github.io/fre
 
 Many TVs read a USB drive formatted as ExFAT (a drive format that holds files over 4 GB and works on both Mac and Windows). Copy the folder of recordings onto the drive, plug the drive into the TV, and open the drive from the TV's media or USB app. Check your TV's manual for the formats it reads.
 
-- **LG TVs**: LG's [help page](https://www.lg.com/us/support/help-library/lg-tv-viewing-content-on-a-usb-device--20153192465296) says to use FAT32 or NTFS. 2021 models read ExFAT drives read-only, which is enough to play files. 2023 models list FAT32, ExFAT, and NTFS. Older models may need NTFS or FAT32.
+- **LG TVs**: LG's [help page](https://www.lg.com/us/support/help-library/lg-tv-viewing-content-on-a-usb-device--20153192465296) says to use FAT32 or NTFS. Some newer models also read ExFAT: the 2021 43UP751C manual says it can read (not write) ExFAT drives, which is enough to play files, and the 2023 UR80 manual lists FAT32, ExFAT, and NTFS. Older models such as the 2016 65UH5C do not read ExFAT, so use NTFS or FAT32 and check your TV's manual.
 - **FAT32**: a FAT32 drive cannot hold a file over 4 GB, so it does not suit HD recordings.
 - **NTFS**: a Mac cannot write to an NTFS drive without extra software.
 
