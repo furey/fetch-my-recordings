@@ -275,9 +275,11 @@ If the app shows nothing, check that it is not still running in the background, 
 
 On some computers, often ones with extra security software, the app's graphics process cannot start. When that happens before the window shows, the app restarts itself with safer graphics settings. There are two fallback steps: first it turns off hardware acceleration, then it also turns off the sandbox for the graphics process. The app keeps the step that worked until an app update brings a new version of Electron, the framework the app is built on.
 
-On Windows, the app also gives its sandboxed processes read access to its install folder. This fixes a folder permission problem that other apps can leave behind ([electron/electron#51761](https://github.com/electron/electron/issues/51761)).
+On Windows, the installer gives the app's sandboxed processes read access to its install folder. This fixes a folder permission problem that other apps can leave behind ([electron/electron#51761](https://github.com/electron/electron/issues/51761)). If a start closes because of that problem, the next start gives the access again.
 
-If the app still does not open, it shows a message with the log file. [Open an issue](https://github.com/furey/fetch-my-recordings/issues) and attach the file `main.log` from the log folder:
+Third-party security software, such as Malwarebytes, can stop the app before its window shows. The app is not signed, so this software does not know it. If the app closes with no window, add the install folder to the allow list of your security software (in Malwarebytes, the **Allow List**), then open the app again. The install folder is `%LOCALAPPDATA%\Programs\fetch-my-recordings`.
+
+If the window does not open on two starts in a row, the next start shows a message with the log folder. [Open an issue](https://github.com/furey/fetch-my-recordings/issues) and attach the files `main.log` and `chromium.log` (Windows only) from the log folder:
 
 | Computer | Log folder                                               |
 | -------- | -------------------------------------------------------- |

@@ -180,24 +180,37 @@ startupTest('the log writes the home folder as ~', async () => {
   if (appRoot.startsWith(os.homedir())) assert.match(log, /~[\\/]/)
 })
 
-startupTest('windows ACL repro (electron#51761): an orphaned package SID on the app folder still ends in a window', { timeout: 120000, skip: !aclRepro && 'FMR_E2E_ACL_REPRO is not set' }, async () => {
+startupTest('windows ACL repro (electron#51761): an orphaned package SID on the app folder still ends in a window', { timeout: 180000, skip: !aclRepro && 'FMR_E2E_ACL_REPRO is not set' }, async () => {
   if (expectAclCrash) await assertAclCrashWithoutGrant()
   const userData = await freshDir('acl-repro')
-  const outcome = await launchUntilWindowOrExit({ userData })
+  const outcomes = await launchUntilWindow({ userData, attempts: 3 })
   const log = await readLog(userData)
-  console.log(`ACL repro with the grant: attempt 1 ${outcome === 'window' ? 'showed a window' : `failed (${outcome})`}.`)
+  console.log(`ACL repro with the repair: ${outcomes.map((outcome, index) => `attempt ${index + 1} ${outcome}`).join(', ')}.`)
   console.log(log)
-  assert.equal(outcome, 'window', `${outcome}\n${log}`)
+  assert.equal(outcomes.at(-1), 'window', `${outcomes.join(', ')}\n${log}`)
+  assert.match(log, /Checking install folder access…/)
+  if (!expectAclCrash) return
+  assert.equal(outcomes[0], `exit ${ACCESS_CHECK_EXIT_CODE}`, log)
+  assert.match(log, /The last start closed because sandboxed processes could not read the install folder\.[^]*Gave sandboxed processes read access to the install folder/)
 })
 
 const assertAclCrashWithoutGrant = async () => {
   const userData = await freshDir('acl-repro-no-grant')
-  const outcome = await launchUntilWindowOrExit({ userData, extraEnv: { FMR_TEST_SKIP_INSTALL_ACCESS: '1' } })
+  const extraEnv = { FMR_TEST_SKIP_INSTALL_ACCESS: '1' }
+  const outcomes = [await launchUntilWindowOrExit({ userData, extraEnv }), await launchUntilWindowOrExit({ userData, extraEnv })]
   const chromiumLog = await fs.readFile(path.join(userData, 'logs', 'chromium.log'), 'utf8').catch(() => '(no chromium.log)')
   const fatalLine = chromiumLog.split('\n').find(line => line.includes('install_dir_access')) ?? '(no install_dir_access line)'
-  console.log(`ACL repro without the grant: ${outcome}. ${fatalLine}`)
-  assert.equal(outcome, `exit ${ACCESS_CHECK_EXIT_CODE}`, `${outcome}\n${await readLog(userData)}\n${chromiumLog}`)
+  const log = await readLog(userData)
+  console.log(`ACL repro without the grant: ${outcomes.join(', ')}. ${fatalLine}`)
+  assert.deepEqual(outcomes, [`exit ${ACCESS_CHECK_EXIT_CODE}`, `exit ${ACCESS_CHECK_EXIT_CODE}`], `${log}\n${chromiumLog}`)
   assert.match(fatalLine, /Sandboxed processes cannot read/)
+  assert.match(log, /Test switch: skipped the install folder access grant\./)
+}
+
+const launchUntilWindow = async ({ userData, attempts }) => {
+  const outcomes = []
+  while (outcomes.length < attempts && outcomes.at(-1) !== 'window') outcomes.push(await launchUntilWindowOrExit({ userData }))
+  return outcomes
 }
 
 const closeApp = async (app) => {

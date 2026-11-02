@@ -3,6 +3,11 @@ import assert from 'node:assert/strict'
 import { parseBoxAddress, describeBox, findBoxes } from '../src/boxes.js'
 import { FETCH_MANUFACTURER_URL, MEDIA_SERVER_TARGET, parseSearchResponse, searchForFetchBoxes } from '../src/discovery.js'
 import { plainReason, summariseResults } from '../src/saving.js'
+import { createInstallAccessRecord, previousStartFailedAccessCheck } from '../src/install-access.js'
+import { createLaunchGuard } from '../src/launch-guard.js'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 
 test('address: accepts an IP address, with or without a port or a URL around it', () => {
   assert.deepEqual(parseBoxAddress(' 192.168.1.50 '), { ip: '192.168.1.50', port: 49152 })
@@ -81,6 +86,44 @@ test('search: with no Fetch-shaped answer, it reads the other media servers when
   const found = await searchForFetchBoxes({ timeoutMs: 100, settleMs: 50, ...harness })
   assert.deepEqual(found.map(device => device.url), [otherFetch])
   assert.deepEqual(harness.read, [otherFetch])
+})
+
+test('install access: finds the access check failure only in the given start of chromium.log', () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'fmr-units-'))
+  const chromiumLogFile = path.join(folder, 'chromium.log')
+  fs.writeFileSync(chromiumLogFile, [
+    '[4100:1102/170628.715:INFO:CONSOLE:5] "Some message", source: file:///index.html (5)',
+    '[4200:1102/170700.100:FATAL:electron\\shell\\browser\\install_dir_access.cc(97)] Sandboxed processes cannot read the folder.',
+    ''
+  ].join('\r\n'))
+  assert.equal(previousStartFailedAccessCheck({ chromiumLogFile, pid: 4200 }), true)
+  assert.equal(previousStartFailedAccessCheck({ chromiumLogFile, pid: 4100 }), false)
+  assert.equal(previousStartFailedAccessCheck({ chromiumLogFile, pid: 420 }), false)
+  assert.equal(previousStartFailedAccessCheck({ chromiumLogFile, pid: null }), false)
+  assert.equal(previousStartFailedAccessCheck({ chromiumLogFile: path.join(folder, 'missing.log'), pid: 4200 }), false)
+  fs.rmSync(folder, { recursive: true, force: true })
+})
+
+test('install access: the repair is recorded once per Electron version', () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'fmr-units-'))
+  const record = createInstallAccessRecord({ folder, electronVersion: '44.9.0' })
+  assert.equal(record.alreadyRepaired(), false)
+  record.markRepaired()
+  assert.equal(record.alreadyRepaired(), true)
+  assert.equal(createInstallAccessRecord({ folder, electronVersion: '45.0.0' }).alreadyRepaired(), false)
+  fs.rmSync(folder, { recursive: true, force: true })
+})
+
+test('launch guard: hands the next start the PID of a start that closed before the window showed', () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'fmr-units-'))
+  const guard = () => createLaunchGuard({ folder, maxRung: 2, electronVersion: '44.9.0' })
+  assert.equal(guard().begin(111).previousPid, null)
+  assert.deepEqual(guard().begin(222), { rung: 0, failedStarts: 1, atLastRung: false, previousPid: 111 })
+  const shown = guard()
+  shown.begin(333)
+  shown.succeed(0)
+  assert.equal(guard().begin(444).previousPid, null)
+  fs.rmSync(folder, { recursive: true, force: true })
 })
 
 const fakeNetwork = (locations, { fetchUrls = locations.filter(location => location.endsWith('/MediaServer.xml')) } = {}) => {
