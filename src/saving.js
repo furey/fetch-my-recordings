@@ -1,9 +1,9 @@
 import fs from 'node:fs/promises'
 import { saveRecordings } from 'fetchtv'
 
-export const startSave = ({ recordings, folder, forPlex, retryDelays, onProgress, onResult }) => {
+export const startSave = ({ recordings, folder, forPlex, copyAgain = false, retryDelays, onProgress, onResult }) => {
   const controller = new AbortController()
-  const done = runSave({ recordings, folder, forPlex, retryDelays, onProgress, onResult, signal: controller.signal })
+  const done = runSave({ recordings, folder, forPlex, copyAgain, retryDelays, onProgress, onResult, signal: controller.signal })
   return { cancel: () => controller.abort(), done }
 }
 
@@ -48,13 +48,14 @@ const failureReason = (text) => {
   return 'The copy did not finish. Save again to try once more.'
 }
 
-const runSave = async ({ recordings, folder, forPlex, retryDelays, onProgress, onResult, signal }) => {
+const runSave = async ({ recordings, folder, forPlex, copyAgain, retryDelays, onProgress, onResult, signal }) => {
   await fs.mkdir(folder, { recursive: true })
   const described = []
   await saveRecordings({
     recordings,
     savePath: folder,
     forPlex,
+    copyAgain,
     retryDelays,
     onProgress,
     onResult: (result) => {

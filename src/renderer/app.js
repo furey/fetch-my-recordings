@@ -15,6 +15,7 @@ const state = {
   open: new Set(),
   folder: '',
   forPlex: false,
+  copyAgain: false,
   folderInfo: null,
   save: null,
   saving: false,
@@ -43,6 +44,7 @@ const start = async () => {
 }
 
 const showWelcome = () => {
+  state.copyAgain = false
   startBackgroundSearch()
   showScreen(0, welcomeScreen())
 }
@@ -183,7 +185,9 @@ const beginSave = async () => {
   }
   state.saving = true
   const visit = showScreen(4, savingScreen())
-  state.saveRun = withMinimumDuration(api.startSave({ folder: state.folder, forPlex: state.forPlex, episodeIds: order.map(episode => episode.id) }))
+  const copyAgain = state.copyAgain
+  state.copyAgain = false
+  state.saveRun = withMinimumDuration(api.startSave({ folder: state.folder, forPlex: state.forPlex, copyAgain, episodeIds: order.map(episode => episode.id) }))
   const result = await state.saveRun
   state.saving = false
   state.listIsStale = true
@@ -864,6 +868,7 @@ const whatNowBody = (id) => {
 const saveAgainWithPlexNames = () => {
   closeInfo()
   state.forPlex = true
+  state.copyAgain = true
   goToFolderStep()
 }
 

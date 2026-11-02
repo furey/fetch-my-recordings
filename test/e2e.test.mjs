@@ -456,6 +456,13 @@ test('after a save: the card opens How to watch your recordings with three tabs 
     await dialog.getByRole('button', { name: 'Save again with Plex names' }).click()
     await page.getByRole('heading', { name: 'Choose a folder' }).waitFor()
     assert.equal(await page.getByRole('switch', { name: 'Names for Plex, Jellyfin or Kodi' }).getAttribute('aria-checked'), 'true')
+    const plainFiles = (await listFiles(saveFolder)).filter(file => file.endsWith('.ts'))
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await waitForFinish({ page, heading: 'All done', timeout: 60000 })
+    const files = (await listFiles(saveFolder)).filter(file => file.endsWith('.ts'))
+    const plexFiles = files.filter(file => file.includes('/Season 01/'))
+    assert.equal(plexFiles.length, plainFiles.length)
+    assert.deepEqual(files.filter(file => !plexFiles.includes(file)), plainFiles)
   } finally {
     await app.close()
     await box.stop()
