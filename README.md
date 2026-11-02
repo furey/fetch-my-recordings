@@ -362,14 +362,14 @@ The app saves each recording as a `.ts` file, exactly as the Fetch box recorded 
 The Freetvarr guide's [Converting recordings to MP4](https://furey.github.io/freetvarr/guide/leaving-fetch#converting-recordings-to-mp4) has the full steps: how to install ffmpeg on a Mac, Windows, or Linux, a full convert for files that a fast copy cannot play (such as SD channels, or recordings with an extra sound track), and commands that convert a whole folder at once.
 
 > [!WARNING]<br>
-> Renaming a `.ts` file to `.mp4` does not convert it. The file inside stays the same, and QuickTime Player and many TVs will not open it.
+> Renaming a `.ts` file to `.mp4` does not convert it. The file inside stays the same, and QuickTime Player will not open it.
 
 > [!WARNING]<br>
 > Download video software only from the official sites: VLC from [videolan.org](https://www.videolan.org), HandBrake from [handbrake.fr](https://handbrake.fr), and ffmpeg through Homebrew, `winget`, or your Linux package manager. Search ads and look-alike sites offer "free video converters" that can come with unwanted software or malware.
 
 ## Watch on your TV from a USB drive
 
-Most TVs read a USB drive formatted as ExFAT (a drive format that holds files over 4 GB and works on both Mac and Windows). Copy the folder of recordings onto the drive, plug the drive into the TV, and open the drive from the TV's media or USB app.
+Many TVs read a USB drive formatted as ExFAT (a drive format that holds files over 4 GB and works on both Mac and Windows). Copy the folder of recordings onto the drive, plug the drive into the TV, and open the drive from the TV's media or USB app. Check your TV's manual for the formats it reads.
 
 - **LG TVs**: LG's [help page](https://www.lg.com/us/support/help-library/lg-tv-viewing-content-on-a-usb-device--20153192465296) says to use FAT32 or NTFS. 2021 models read ExFAT drives read-only, which is enough to play files. 2023 models list FAT32, ExFAT, and NTFS. Older models may need NTFS or FAT32.
 - **FAT32**: a FAT32 drive cannot hold a file over 4 GB, so it does not suit HD recordings.
