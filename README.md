@@ -206,6 +206,15 @@ In Little Snitch, choose **Only local network** and a lasting option instead of 
 
 ### First open on Windows
 
+Microsoft Edge can stop the download with the message **Fetch-My-Recordings-Windows.exe isn't commonly downloaded. Make sure you trust Fetch-My-Recordings-Windows.exe before you open it.** Edge shows this message for new files that few people have downloaded. To keep the file:
+
+1. In the Edge downloads list, point to the file and click the **...** (More actions) button.
+2. Click **Keep**.
+3. If Edge asks again, click **Show more**.
+4. Click **Keep anyway**.
+
+To open the app after the download:
+
 1. Double-click the `.exe` file you downloaded.
 2. A blue message says Windows protected your PC. Click **More info**.
 
@@ -224,7 +233,7 @@ In Little Snitch, choose **Only local network** and a lasting option instead of 
 
 5. Wait for the app to install and open. It installs for your Windows user only, and it is in the Start menu after that.
 
-The first time the app searches for your Fetch box, Windows Security can ask whether to allow Fetch My Recordings on your networks:
+The first time the app searches for your Fetch box, Windows Security can show a message that asks whether to allow Fetch My Recordings on your networks. Some PCs do not show this message; if yours does not, you have nothing to do here. If the message appears:
 
 1. Tick **Private networks, such as my home or work network**.
 2. Leave **Public networks** unticked.
