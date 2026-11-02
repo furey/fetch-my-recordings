@@ -19,7 +19,8 @@ const FETCHTV_REPOSITORY_URL = 'https://github.com/furey/fetchtv'
 const EXTERNAL_LINKS = {
   vlc: 'https://www.videolan.org/vlc/',
   freetvarr: 'https://furey.github.io/freetvarr/',
-  mp4: 'https://furey.github.io/freetvarr/guide/leaving-fetch#converting-recordings-to-mp4'
+  mp4: 'https://furey.github.io/freetvarr/guide/leaving-fetch#converting-recordings-to-mp4',
+  usb: 'https://github.com/furey/fetch-my-recordings#watch-on-your-tv-from-a-usb-drive'
 }
 const DISCUSSIONS_URL = 'https://github.com/furey/fetch-my-recordings/discussions'
 const SHOW_FALLBACK_MS = 10000
