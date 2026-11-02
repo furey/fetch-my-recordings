@@ -121,6 +121,8 @@ const useBox = async (box) => {
     sounds.play('failed')
     return showScreen(2, listFailedScreen())
   }
+  if (result.problem === 'no-answer') return showScreen(2, boxDidNotAnswerScreen())
+  if (result.problem === 'not-sharing') return showScreen(2, notSharingScreen())
   state.shows = result.shows
   state.selected = new Set(savableEpisodes(state.shows).filter(isWanted).map(episode => episode.id))
   showScreen(2, state.shows.length === 0 ? emptyListScreen() : recordingsScreen())
@@ -371,8 +373,45 @@ const emptyListScreen = () => ({
 const emptyInfo = () => openInfo({
   title: 'No recordings on this box',
   body: [
-    h('p', {}, 'The box answered, but it lists no recordings to copy.'),
-    h('p', { id: 'cancelled-account' }, 'A Fetch box whose account is cancelled shows its setup screen on the TV and lists no recordings.')
+    h('p', { id: 'empty-reason' }, 'The box answered, and it has no recordings.')
+  ]
+})
+
+const boxDidNotAnswerScreen = () => ({
+  content: [
+    boxCard(),
+    illustration('no-box'),
+    headingWithInfo({ text: 'The box did not send its recordings', info: boxDidNotAnswerInfo }),
+    h('p', { className: 'lead', id: 'restart-box' }, 'Restart the Fetch box, then try again.'),
+    h('p', {}, h('button', { type: 'button', className: 'btn', onclick: () => useBox(state.box) }, 'Try again')),
+    h('p', {}, h('button', { type: 'button', className: 'link', onclick: () => searchForBoxes({ autoPick: false, wholeNetwork: true }) }, 'Search again'))
+  ]
+})
+
+const boxDidNotAnswerInfo = () => openInfo({
+  title: 'The box did not send its recordings',
+  body: [
+    h('p', {}, 'The Fetch box answered, but it did not answer the request for its list of recordings properly. This does not mean the box has no recordings.'),
+    h('p', {}, 'To restart the box, turn it off at the wall, wait 10 seconds, and turn it on again. When the TV shows the Fetch home screen, click Try again.')
+  ]
+})
+
+const notSharingScreen = () => ({
+  content: [
+    boxCard(),
+    illustration('no-recordings'),
+    headingWithInfo({ text: 'The box is not sharing its recordings', info: notSharingInfo }),
+    h('p', { className: 'lead', id: 'check-tv' }, 'Check the TV. If it shows the Fetch setup or activation screen, the box has lost its Fetch service.'),
+    h('p', {}, h('button', { type: 'button', className: 'btn', onclick: () => useBox(state.box) }, 'Check again'))
+  ]
+})
+
+const notSharingInfo = () => openInfo({
+  title: 'The box is not sharing its recordings',
+  body: [
+    h('p', {}, 'The Fetch box answered, but it does not share a list of recordings.'),
+    h('p', { id: 'lost-service' }, 'A Fetch box shows its setup or activation screen on the TV when it has lost its Fetch service: the account is cancelled or suspended, or the box cannot reach the internet.'),
+    h('p', {}, 'The app cannot list the recordings until the box has its Fetch service again. If the box cannot reach the internet, check its network cable or Wi-Fi and your router.')
   ]
 })
 

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { parseBoxAddress, describeBox, findBoxes } from '../src/boxes.js'
 import { FETCH_MANUFACTURER_URL, MEDIA_SERVER_TARGET, parseSearchResponse, searchForFetchBoxes } from '../src/discovery.js'
 import { plainReason, summariseResults } from '../src/saving.js'
+import { describeListing, listingProblemFor } from '../src/recordings.js'
 import { createInstallAccessRecord, previousStartFailedAccessCheck } from '../src/install-access.js'
 import { createLaunchGuard } from '../src/launch-guard.js'
 import fs from 'node:fs'
@@ -150,3 +151,20 @@ const fakeNetwork = (locations, { fetchUrls = locations.filter(location => locat
     }
   }
 }
+
+test('listing: each fetchtv listing outcome maps to the right screen', () => {
+  assert.equal(listingProblemFor('no-content-directory'), 'no-answer')
+  assert.equal(listingProblemFor('browse-failed'), 'no-answer')
+  assert.equal(listingProblemFor('recordings-browse-failed'), 'no-answer')
+  assert.equal(listingProblemFor('no-recordings-folder'), 'not-sharing')
+  assert.equal(listingProblemFor('empty'), null)
+  assert.equal(listingProblemFor('ok'), null)
+})
+
+test('listing: the log line names the box IP, the outcome, and any error or folders', () => {
+  assert.equal(describeListing({ address: '192.168.1.50', outcome: 'ok' }), 'Listed recordings from box 192.168.1.50: ok.')
+  assert.equal(describeListing({ address: '192.168.1.50', outcome: 'browse-failed', error: 'Request failed with status code 500' }),
+    'Listed recordings from box 192.168.1.50: browse-failed. Error: Request failed with status code 500.')
+  assert.equal(describeListing({ address: '192.168.1.50', outcome: 'no-recordings-folder', folders: [] }),
+    'Listed recordings from box 192.168.1.50: no-recordings-folder. The box listed these folders: none.')
+})

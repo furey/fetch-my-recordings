@@ -246,14 +246,54 @@ test('a box with no recordings explains why the list is empty', async () => {
     await page.getByRole('heading', { name: 'No recordings on this box' }).waitFor()
     await capture({ app, page, name: '2-empty' })
     await page.getByRole('button', { name: 'More about: No recordings on this box' }).click()
-    await page.locator('#cancelled-account', { hasText: 'A Fetch box whose account is cancelled shows its setup screen on the TV and lists no recordings.' }).waitFor()
+    await page.locator('#empty-reason', { hasText: 'The box answered, and it has no recordings.' }).waitFor()
     await page.mouse.click(5, 5)
     await page.locator('#info-dialog').waitFor({ state: 'hidden' })
+    assert.match(await readMainLog(userData), /Listed recordings from box 127\.0\.0\.1: empty\./)
   } finally {
     await app.close()
     await box.stop()
   }
 })
+
+test('a box with no Recordings folder says it is not sharing its recordings', async () => {
+  const box = await startFakeBox({ rootFolders: ['Live TV'] })
+  const userData = await freshDir('user-data-not-sharing')
+  await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify({ lastAddress: box.address }))
+  const app = await launchApp({ userData })
+  try {
+    const page = await openApp(app)
+    await page.getByRole('heading', { name: 'The box is not sharing its recordings' }).waitFor()
+    await page.locator('#check-tv', { hasText: 'Check the TV. If it shows the Fetch setup or activation screen, the box has lost its Fetch service.' }).waitFor()
+    await page.getByRole('button', { name: 'More about: The box is not sharing its recordings' }).click()
+    await page.locator('#lost-service', { hasText: 'the account is cancelled or suspended, or the box cannot reach the internet' }).waitFor()
+    assert.match(await readMainLog(userData), /Listed recordings from box 127\.0\.0\.1: no-recordings-folder\. The box listed these folders: Live TV\./)
+  } finally {
+    await app.close()
+    await box.stop()
+  }
+})
+
+test('a box that fails the Recordings request asks for a restart, not an empty list', async () => {
+  const box = await startFakeBox({ failingBrowses: ['1'] })
+  const userData = await freshDir('user-data-no-answer')
+  await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify({ lastAddress: box.address }))
+  const app = await launchApp({ userData })
+  try {
+    const page = await openApp(app)
+    await page.getByRole('heading', { name: 'The box did not send its recordings' }).waitFor({ timeout: 60000 })
+    await page.locator('#restart-box', { hasText: 'Restart the Fetch box, then try again.' }).waitFor()
+    await page.getByRole('button', { name: 'Try again' }).waitFor()
+    await page.getByRole('button', { name: 'Search again' }).waitFor()
+    assert.equal(await page.getByRole('heading', { name: 'No recordings on this box' }).count(), 0)
+    assert.match(await readMainLog(userData), /Listed recordings from box 127\.0\.0\.1: recordings-browse-failed\. Error: .*500/)
+  } finally {
+    await app.close()
+    await box.stop()
+  }
+})
+
+const readMainLog = (userData) => fs.readFile(path.join(userData, 'logs', 'main.log'), 'utf8').catch(() => '')
 
 test('saved recordings: still there is unticked, moved or deleted is ticked with the reason, new is ticked', async () => {
   const box = await startFakeBox({ shows: [demoShows()[0]] })

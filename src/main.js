@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { syncCleanupLockFiles } from 'fetchtv'
 import { connectToAddress, describeBox, findBoxes, parseBoxAddress } from './boxes.js'
 import { describeFolder } from './folders.js'
-import { listRecordings, pickEpisodes } from './recordings.js'
+import { describeListing, listingProblemFor, listRecordings, pickEpisodes } from './recordings.js'
 import { startSave } from './saving.js'
 import { createSettings } from './settings.js'
 import { createHistory, savedStates } from './history.js'
@@ -465,8 +465,12 @@ const registerIpc = ({ settings, history }) => {
     const location = state.boxes.get(boxId)
     if (!location) return { error: 'unknown-box' }
     const onProgress = (progress) => send('recordings:progress', progress)
+    const address = new URL(location.url).hostname
     try {
-      const { shows, summaries } = await listRecordings({ location, onProgress })
+      const { shows, summaries, outcome } = await listRecordings({ location, onProgress })
+      state.log.write(describeListing({ address, ...outcome }))
+      const problem = listingProblemFor(outcome.outcome)
+      if (problem) return { problem }
       const box = describeBox(location)
       const { lastFolder } = await settings.read()
       const saved = await savedStates({
@@ -480,7 +484,8 @@ const registerIpc = ({ settings, history }) => {
       state.boxKey = box.key
       await settings.update({ lastAddress: box.address })
       return { shows: state.summaries }
-    } catch {
+    } catch (error) {
+      state.log.write(`Could not list recordings from box ${address}: ${describeError(error)}`)
       return { error: 'list-failed' }
     }
   })

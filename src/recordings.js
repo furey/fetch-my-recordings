@@ -1,10 +1,27 @@
 import { getFetchRecordings, isCurrentlyRecording, sortRecordingsByTitle } from 'fetchtv'
 
 export const listRecordings = async ({ location, onProgress }) => {
-  const shows = sortRecordingsByTitle(await getFetchRecordings({ location, filters: {}, onProgress }))
+  let outcome = { outcome: 'ok' }
+  const onOutcome = (reported) => { outcome = reported }
+  const shows = sortRecordingsByTitle(await getFetchRecordings({ location, filters: {}, onProgress, onOutcome }))
   const summaries = await Promise.all(shows.map(summariseShow))
-  return { shows, summaries }
+  return { shows, summaries, outcome }
 }
+
+export const listingProblemFor = (outcome) => LISTING_PROBLEMS[outcome] ?? null
+
+const LISTING_PROBLEMS = {
+  'no-content-directory': 'no-answer',
+  'browse-failed': 'no-answer',
+  'recordings-browse-failed': 'no-answer',
+  'no-recordings-folder': 'not-sharing'
+}
+
+export const describeListing = ({ address, outcome, error, folders }) => [
+  `Listed recordings from box ${address}: ${outcome}.`,
+  error ? `Error: ${error}.` : '',
+  folders ? `The box listed these folders: ${folders.length > 0 ? folders.join(', ') : 'none'}.` : ''
+].filter(Boolean).join(' ')
 
 export const pickEpisodes = ({ shows, episodeIds }) => {
   const wanted = new Set(episodeIds.map(String))

@@ -337,7 +337,13 @@ Click **How to watch your recordings** to see how to watch the files on this com
 
 If a save stops part way, or some recordings are not saved, click **Save again**. The app skips the recordings that are already in the folder and continues a part-saved recording from where it stopped. The app keeps its list of saved files in a `fetchtv.json` file in the folder, the same file the [`fetchtv` command-line tool](https://github.com/furey/fetchtv) uses. So the app and `fetchtv` can take turns on one folder.
 
-If the app says the box has no recordings, check the TV. A Fetch box whose account is cancelled shows its setup screen on the TV and lists no recordings.
+If the app cannot show the recordings, its message says why:
+
+- **The box did not send its recordings**: the box answered, but not the request for its list of recordings. This does not mean the box has no recordings. Turn the box off at the wall, wait 10 seconds, turn it on again, then click **Try again**.
+- **The box is not sharing its recordings**: check the TV. If it shows the Fetch setup or activation screen, the box has lost its Fetch service (the account is cancelled or suspended, or the box cannot reach the internet). The app cannot list the recordings until the box has its Fetch service again.
+- **No recordings on this box**: the box answered, and it has no recordings.
+
+The app writes each result to `main.log` in its [log folder](#if-the-app-does-not-open). If you ask for help, attach that file.
 
 ## Convert to MP4
 
