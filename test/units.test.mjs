@@ -43,7 +43,9 @@ test('reasons: each result gets a plain reason with no error codes', () => {
   assert.match(reason('failed', { error: "Directory creation failed: ENAMETOOLONG: name too long, mkdir 'C:\\Users\\x\\Reset Timeout'" }), /^The file name is too long for this folder\. Choose a folder with a shorter path/)
   assert.match(reason('failed', { error: "Write error: EINVAL: invalid argument, open 'D:\\Fetch\\CON\\x.ts.part'" }), /^This folder does not accept the file name\. Choose another folder\.$/)
   assert.match(reason('failed', { error: "Directory creation failed: ENOTDIR: not a directory, mkdir '/x/y'" }), /does not accept the file name/)
-  for (const error of ['ENAMETOOLONG: name too long', 'EINVAL: invalid argument', 'ENOTDIR: not a directory']) {
+  assert.match(reason('failed', { error: "Directory creation failed: EINVAL: invalid argument, mkdir 'D:\\Fetch\\AUX'" }), /does not accept the file name/)
+  assert.doesNotMatch(reason('failed', { error: 'Download initiation failed: connect EINVAL 192.168.1.50:49152 - Local (0.0.0.0:0)' }), /file name/)
+  for (const error of ['ENAMETOOLONG: name too long', "EINVAL: invalid argument, open 'x'", 'ENOTDIR: not a directory']) {
     assert.doesNotMatch(reason('failed', { error }), /Save again|save again/)
   }
   assert.doesNotMatch(reason('failed', { error: 'something odd' }), /odd/)

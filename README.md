@@ -216,15 +216,15 @@ Microsoft Edge can stop the download with the message **Fetch-My-Recordings-Wind
 To open the app after the download:
 
 1. Double-click the `.exe` file you downloaded.
-2. A blue message says Windows protected your PC. Click **More info**.
+2. If a blue message says Windows protected your PC, click **More info**. If no message appears, go to step 5.
 
    <p align="center">
      <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/first-open-windows-protected.png" alt="Illustration of the blue Windows protected your PC message, with the More info link marked" width="600"/>
      <br/><em>Illustration: Windows protected your PC</em>
    </p>
 
-3. Check that the **Publisher** line says Unknown publisher.
-4. Click **Run anyway**.
+3. If you saw the message, check that the **Publisher** line says Unknown publisher.
+4. If you saw the message, click **Run anyway**.
 
    <p align="center">
      <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/first-open-windows-run-anyway.png" alt="Illustration of the same message after More info, with the Run anyway button marked" width="600"/>
