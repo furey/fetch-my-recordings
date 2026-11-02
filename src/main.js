@@ -507,12 +507,12 @@ const registerIpc = ({ settings, history }) => {
     return describeFolder({ folder, items: selectedItems(episodeIds) })
   })
 
-  handle('save:start', async ({ folder, forPlex, episodeIds }) => {
+  handle('save:start', async ({ folder, forPlex, copyAgain, episodeIds }) => {
     if (state.activeSave) return { error: 'already-saving' }
     if (!isUsableFolder(folder)) return { error: 'invalid-folder' }
     const recordings = pickEpisodes({ shows: state.shows, episodeIds: toIdList(episodeIds) })
     await settings.update({ lastFolder: folder, forPlex: Boolean(forPlex) })
-    return runSave({ recordings, folder, forPlex: Boolean(forPlex), history })
+    return runSave({ recordings, folder, forPlex: Boolean(forPlex), copyAgain: Boolean(copyAgain), history })
   })
 
   handle('save:cancel', async () => {
@@ -549,12 +549,13 @@ const registerIpc = ({ settings, history }) => {
   })
 }
 
-const runSave = async ({ recordings, folder, forPlex, history }) => {
+const runSave = async ({ recordings, folder, forPlex, copyAgain, history }) => {
   const blockerId = powerSaveBlocker.start('prevent-app-suspension')
   const save = startSave({
     recordings,
     folder,
     forPlex,
+    copyAgain,
     retryDelays: retryDelaysFromEnv(),
     onProgress: ({ id, bytes, total }) => send('save:progress', { id: String(id), bytes, total }),
     onResult: (result) => send('save:result', result)
