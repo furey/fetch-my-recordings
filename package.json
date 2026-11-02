@@ -30,7 +30,7 @@
     "electron": "44.9.0",
     "electron-builder": "26.17.0",
     "esbuild": "0.28.2",
-    "fetchtv": "^2.2.1",
+    "fetchtv": "^2.2.5",
     "node-ssdp": "^4.0.1",
     "playwright-core": "1.64.1"
   }
