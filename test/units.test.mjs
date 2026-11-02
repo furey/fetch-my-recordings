@@ -156,6 +156,7 @@ test('listing: each fetchtv listing outcome maps to the right screen', () => {
   assert.equal(listingProblemFor('no-content-directory'), 'no-answer')
   assert.equal(listingProblemFor('browse-failed'), 'no-answer')
   assert.equal(listingProblemFor('recordings-browse-failed'), 'no-answer')
+  assert.equal(listingProblemFor('items-browse-failed'), 'no-answer')
   assert.equal(listingProblemFor('no-recordings-folder'), 'not-sharing')
   assert.equal(listingProblemFor('empty'), null)
   assert.equal(listingProblemFor('ok'), null)
