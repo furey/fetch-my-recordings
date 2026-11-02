@@ -21,7 +21,7 @@ const EXTERNAL_LINKS = {
   freetvarr: 'https://furey.github.io/freetvarr/',
   mp4: 'https://furey.github.io/freetvarr/guide/leaving-fetch#converting-recordings-to-mp4'
 }
-const ISSUES_URL = 'https://github.com/furey/fetch-my-recordings/issues'
+const DISCUSSIONS_URL = 'https://github.com/furey/fetch-my-recordings/discussions'
 const SHOW_FALLBACK_MS = 10000
 const CHROMIUM_LOG_MAX_BYTES = 2 * 1024 * 1024
 const FAULTS_WITHOUT_READY = new Set(['no-ready', 'gpu-crash', 'renderer-crash'])
@@ -193,7 +193,7 @@ const startWatchdog = () => {
     state.log.write(`No window after ${waitMs / 1000} s. Closing so the next start can try again.`)
     showErrorBox({
       title: 'Fetch My Recordings did not open',
-      content: `The window did not open within ${waitMs / 1000} seconds. Open the app again. It starts with safer graphics settings.\n\nIf it still does not open, report it at ${ISSUES_URL} and attach the log file:\n${state.log.filePath}`
+      content: `The window did not open within ${waitMs / 1000} seconds. Open the app again. It starts with safer graphics settings.\n\nIf it still does not open, start a thread at ${DISCUSSIONS_URL} and attach the log file:\n${state.log.filePath}`
     })
     exitApp(1)
   }, waitMs)
@@ -219,7 +219,7 @@ const failFatally = ({ error, origin }) => {
   settleStart()
   showErrorBox({
     title: 'Fetch My Recordings has to close',
-    content: `Something went wrong: ${error?.message ?? error}\n\nIf it happens again, report it at ${ISSUES_URL} and attach the log file:\n${state.log.filePath}`
+    content: `Something went wrong: ${error?.message ?? error}\n\nIf it happens again, start a thread at ${DISCUSSIONS_URL} and attach the log file:\n${state.log.filePath}`
   })
   exitApp(1)
 }
@@ -302,7 +302,7 @@ const warnRepeatedFailedStarts = (failedStarts) => {
   state.log.write('Showing an error box: the window has not opened for several starts.')
   showErrorBox({
     title: 'Fetch My Recordings could not open its window',
-    content: `The app closed before its window opened the last ${failedStarts} times. It tries to open again now.\n\nIf no window opens, report it at ${ISSUES_URL} and attach the files in the log folder:\n${state.log.folder}`
+    content: `The app closed before its window opened the last ${failedStarts} times. It tries to open again now.\n\nIf no window opens, start a thread at ${DISCUSSIONS_URL} and attach the files in the log folder:\n${state.log.folder}`
   })
 }
 

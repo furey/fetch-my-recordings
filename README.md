@@ -41,6 +41,7 @@ Prefer a terminal, a NAS, or Docker? See [Related projects](#related-projects).
 - [Related projects](#related-projects)
 - [Development](#development)
 - [Disclaimer](#disclaimer)
+- [Contributing](#contributing)
 - [Support](#support)
 
 ## Overview
@@ -288,7 +289,7 @@ On Windows, the installer gives the app's sandboxed processes read access to its
 
 Third-party security software, such as Malwarebytes, can stop the app before its window shows. The app is not signed, so this software does not know it. If the app closes with no window, add the install folder to the allow list of your security software (in Malwarebytes, the **Allow List**), then open the app again. The install folder is `%LOCALAPPDATA%\Programs\fetch-my-recordings`.
 
-If the window does not open on two starts in a row, the next start shows a message with the log folder. [Open an issue](https://github.com/furey/fetch-my-recordings/issues) and attach the files `main.log` and `chromium.log` (Windows only) from the log folder:
+If the window does not open on two starts in a row, the next start shows a message with the log folder. [Start a thread in Discussions](https://github.com/furey/fetch-my-recordings/discussions) and attach the files `main.log` and `chromium.log` (Windows only) from the log folder:
 
 | Computer | Log folder                                               |
 | -------- | -------------------------------------------------------- |
@@ -445,6 +446,10 @@ This project:
 - Is not made, endorsed, or supported by Fetch TV.
 - Is written with the assistance of AI and may contain errors.
 - Is provided as-is with no warranty. Use it at your own risk.
+
+## Contributing
+
+If you hit a problem or want to compare notes, start a thread in [Discussions](https://github.com/furey/fetch-my-recordings/discussions).
 
 ## Support
 
