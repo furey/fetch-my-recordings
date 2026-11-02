@@ -39,6 +39,8 @@ export const plainReason = (result) => {
 const failureReason = (text) => {
   if (/ENOSPC/.test(text)) return 'The folder ran out of space.'
   if (/EACCES|EPERM|EROFS/.test(text)) return 'Could not write to this folder. Choose another folder.'
+  if (/ENAMETOOLONG/.test(text)) return 'The file name is too long for this folder. Choose a folder with a shorter path, such as one at the top of a drive.'
+  if (/EINVAL: [^,]*, (open|mkdir|rename|copyfile|unlink|stat|lstat|scandir|utime|chmod)\b|ENOTDIR|EISDIR/.test(text)) return 'This folder does not accept the file name. Choose another folder.'
   if (/rejected the resume/.test(text)) return 'The box would not carry on from where the copy stopped. Save again to start this recording again.'
   if (/ECONNREFUSED|EHOSTUNREACH|ENETUNREACH|ENOTFOUND/.test(text)) return 'The box stopped answering. Check that it is turned on and connected, then save again.'
   if (/status code 4\d\d|status code 5\d\d/.test(text)) return 'The box would not send this recording.'

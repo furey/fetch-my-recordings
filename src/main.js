@@ -6,13 +6,13 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { syncCleanupLockFiles } from 'fetchtv'
 import { connectToAddress, describeBox, findBoxes, parseBoxAddress } from './boxes.js'
 import { describeFolder } from './folders.js'
-import { listRecordings, pickEpisodes } from './recordings.js'
+import { describeListing, listingProblemFor, listRecordings, pickEpisodes } from './recordings.js'
 import { startSave } from './saving.js'
 import { createSettings } from './settings.js'
 import { createHistory, savedStates } from './history.js'
 import { createStartupLog, describeError } from './startup-log.js'
 import { createLaunchGuard } from './launch-guard.js'
-import { grantSandboxReadAccess } from './install-access.js'
+import { createInstallAccessRecord, grantSandboxReadAccess, previousStartFailedAccessCheck } from './install-access.js'
 
 const APP_REPOSITORY_URL = 'https://github.com/furey/fetch-my-recordings'
 const FETCHTV_REPOSITORY_URL = 'https://github.com/furey/fetchtv'
@@ -76,10 +76,12 @@ const main = () => {
     return app.quit()
   }
   crashReporter.start({ uploadToServer: false })
-  keepChromiumLog()
   state.log.write(`Starting version ${APP_VERSION} on ${process.platform} ${process.arch} (${os.release()}), Electron ${process.versions.electron}.`)
-  prepareGpuFallback()
+  const previousStart = beginLaunch()
   startWatchdog()
+  repairInstallFolderAccess(previousStart)
+  keepChromiumLog()
+  applyGpuFallback()
   app.enableSandbox()
   app.setAboutPanelOptions({
     applicationName: 'Fetch My Recordings',
@@ -241,25 +243,37 @@ const showErrorBox = ({ title, content }) => {
   }
 }
 
-const prepareGpuFallback = () => {
+const beginLaunch = () => {
   state.launchGuard = createLaunchGuard({
     folder: app.getPath('userData'),
     maxRung: GPU_FALLBACKS.length - 1,
     electronVersion: process.versions.electron
   })
-  const { rung, failedStarts, atLastRung } = state.launchGuard.begin()
+  const { rung, failedStarts, atLastRung, previousPid } = state.launchGuard.begin(process.pid)
   state.gpuRung = rung
   if (failedStarts > 0) state.log.write(`The last ${failedStarts} start(s) closed before the window showed.`)
-  repairInstallFolderAccess()
   if (failedStarts >= 2 || (failedStarts > 0 && atLastRung)) warnRepeatedFailedStarts(failedStarts)
+  return { failedStarts, previousPid }
+}
+
+const applyGpuFallback = () => {
+  const rung = state.gpuRung
   if (rung === 0) return
   state.log.write(`Using graphics fallback ${rung} (${GPU_FALLBACKS[rung].name}), kept from an earlier start.`)
   GPU_FALLBACKS[rung].apply()
 }
 
-const repairInstallFolderAccess = () => {
+const repairInstallFolderAccess = ({ failedStarts, previousPid }) => {
   if (process.platform !== 'win32' || !app.isPackaged) return
+  state.log.write('Checking install folder access…')
+  if (failedStarts === 0) return
+  const chromiumLogFile = path.join(state.log.folder, 'chromium.log')
+  if (!previousStartFailedAccessCheck({ chromiumLogFile, pid: previousPid })) return
+  state.log.write('The last start closed because sandboxed processes could not read the install folder.')
+  const record = createInstallAccessRecord({ folder: app.getPath('userData'), electronVersion: process.versions.electron })
+  if (record.alreadyRepaired()) return state.log.write(`Already tried to repair the install folder access once for Electron ${process.versions.electron}. Reinstall the app to repair it again.`)
   if (isTestRun() && process.env.FMR_TEST_SKIP_INSTALL_ACCESS === '1') return state.log.write('Test switch: skipped the install folder access grant.')
+  record.markRepaired()
   const result = grantSandboxReadAccess(path.dirname(process.execPath))
   state.log.write(result.ok
     ? 'Gave sandboxed processes read access to the install folder (ALL APPLICATION PACKAGES).'
@@ -451,8 +465,12 @@ const registerIpc = ({ settings, history }) => {
     const location = state.boxes.get(boxId)
     if (!location) return { error: 'unknown-box' }
     const onProgress = (progress) => send('recordings:progress', progress)
+    const address = new URL(location.url).hostname
     try {
-      const { shows, summaries } = await listRecordings({ location, onProgress })
+      const { shows, summaries, outcome } = await listRecordings({ location, onProgress })
+      state.log.write(describeListing({ address, ...outcome }))
+      const problem = listingProblemFor(outcome.outcome)
+      if (problem) return { problem }
       const box = describeBox(location)
       const { lastFolder } = await settings.read()
       const saved = await savedStates({
@@ -466,7 +484,8 @@ const registerIpc = ({ settings, history }) => {
       state.boxKey = box.key
       await settings.update({ lastAddress: box.address })
       return { shows: state.summaries }
-    } catch {
+    } catch (error) {
+      state.log.write(`Could not list recordings from box ${address}: ${describeError(error)}`)
       return { error: 'list-failed' }
     }
   })

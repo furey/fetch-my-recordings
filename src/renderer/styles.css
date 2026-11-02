@@ -696,16 +696,26 @@ p {
 
 .progress.is-busy > span {
   width: 40%;
+  transition: none;
   animation: busy 1.2s ease-in-out infinite;
 }
 
 @keyframes busy {
-  0% { margin-left: -40%; }
-  100% { margin-left: 100%; }
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
+
+@keyframes busy-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.8; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .progress.is-busy > span { width: 100%; animation: none; opacity: 0.4; }
+  .progress.is-busy > span { width: 100%; animation: busy-pulse 1.6s ease-in-out infinite; }
+}
+
+body.is-hidden .progress.is-busy > span {
+  animation-play-state: paused;
 }
 
 .searching {

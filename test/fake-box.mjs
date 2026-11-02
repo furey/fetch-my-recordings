@@ -89,7 +89,9 @@ export const startFakeBox = async ({
   port = 0,
   ssdp = false,
   quirks = {},
-  bytesPerSecond = 0
+  bytesPerSecond = 0,
+  rootFolders = ['Recordings', 'Live TV'],
+  failingBrowses = []
 } = {}) => {
   const catalogue = buildCatalogue(shows)
   const requests = []
@@ -99,7 +101,7 @@ export const startFakeBox = async ({
   const server = createServer((req, res) => {
     requests.push({ method: req.method, url: req.url, range: req.headers.range ?? null })
     if (req.method === 'GET' && req.url === '/MediaServer.xml') return sendXml(res, mediaServerXml)
-    if (req.method === 'POST' && req.url === '/upnp/control/ContentDirectory') return answerBrowse({ req, res, catalogue, baseUrl: baseUrlOf() })
+    if (req.method === 'POST' && req.url === '/upnp/control/ContentDirectory') return answerBrowse({ req, res, catalogue, baseUrl: baseUrlOf(), rootFolders, failingBrowses })
     const itemMatch = req.url.match(/^\/item\/(\d+)$/)
     if (itemMatch && (req.method === 'GET' || req.method === 'HEAD')) {
       const item = catalogue.items.get(itemMatch[1])
@@ -163,16 +165,22 @@ const buildCatalogue = (shows) => {
   return { showFolders, items }
 }
 
-const answerBrowse = async ({ req, res, catalogue, baseUrl }) => {
+const answerBrowse = async ({ req, res, catalogue, baseUrl, rootFolders, failingBrowses }) => {
   const body = await readBody(req)
   const objectId = body.match(/<ObjectID>([^<]*)<\/ObjectID>/)?.[1] ?? '0'
-  const didl = didlFor({ objectId, catalogue, baseUrl })
+  if (failingBrowses.includes(objectId)) {
+    res.writeHead(500)
+    return res.end()
+  }
+  const didl = didlFor({ objectId, catalogue, baseUrl, rootFolders })
   sendXml(res, browseEnvelope(didl.xml, didl.count))
 }
 
-const didlFor = ({ objectId, catalogue, baseUrl }) => {
+const ROOT_FOLDER_IDS = { Recordings: '1', 'Live TV': '2' }
+
+const didlFor = ({ objectId, catalogue, baseUrl, rootFolders }) => {
   if (objectId === '0') {
-    return { count: 2, xml: [container({ id: '1', parentId: '0', title: 'Recordings' }), container({ id: '2', parentId: '0', title: 'Live TV' })].join('') }
+    return { count: rootFolders.length, xml: rootFolders.map(title => container({ id: ROOT_FOLDER_IDS[title] ?? title, parentId: '0', title })).join('') }
   }
   if (objectId === '1') {
     return { count: catalogue.showFolders.length, xml: catalogue.showFolders.map(show => container({ id: show.id, parentId: '1', title: show.title })).join('') }
