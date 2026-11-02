@@ -800,8 +800,10 @@ const whatNowSection = (id) => {
 const whatNowBody = (id) => {
   if (id === 'computer') {
     return [
-      h('p', {}, 'Open them in VLC, a free video player. QuickTime can’t play most of them.'),
-      h('p', {}, linkButton({ label: 'Download VLC', name: 'vlc' }))
+      h('p', {}, 'Open them in VLC, a free video player that plays them all. QuickTime Player on a recent Mac plays many of them too.'),
+      h('p', {}, linkButton({ label: 'Download VLC', name: 'vlc' })),
+      h('p', {}, 'Need an MP4 instead? The Freetvarr guide shows how to convert them.'),
+      h('p', {}, linkButton({ label: 'Convert to MP4', name: 'mp4' }))
     ]
   }
   if (id === 'tv') {

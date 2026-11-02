@@ -29,7 +29,7 @@ before(async () => {
 })
 
 after(async () => {
-  await fs.rm(tmpRoot, { recursive: true, force: true })
+  await fs.rm(tmpRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 }).catch(() => {})
 })
 
 startupTest('startup fault renderer-crash: shows the window and a Reload dialog, then reloads, and leaves the graphics fallback at 0', async () => {

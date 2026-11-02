@@ -36,6 +36,7 @@ Prefer a terminal, a NAS, or Docker? See [Related projects](#related-projects).
 - [Requirements](#requirements)
 - [First open](#first-open)
 - [Using the app](#using-the-app)
+- [Convert to MP4](#convert-to-mp4)
 - [Built on fetchtv](#built-on-fetchtv)
 - [Related projects](#related-projects)
 - [Development](#development)
@@ -326,6 +327,23 @@ Click **How to watch your recordings** to see how to watch the files on this com
 If a save stops part way, or some recordings are not saved, click **Save again**. The app skips the recordings that are already in the folder and continues a part-saved recording from where it stopped. The app keeps its list of saved files in a `fetchtv.json` file in the folder, the same file the [`fetchtv` command-line tool](https://github.com/furey/fetchtv) uses. So the app and `fetchtv` can take turns on one folder.
 
 If the app says the box has no recordings, check the TV. A Fetch box whose account is cancelled shows its setup screen on the TV and lists no recordings.
+
+## Convert to MP4
+
+The app saves each recording as a `.ts` file, exactly as the Fetch box recorded it. To convert a file is to copy its picture and sound into another kind of video file. MP4 is the kind of video file that most phones, tablets, TVs, and video apps open. You may not need to convert anything:
+
+- **Play them as they are**: VLC (a free video player), Plex, Jellyfin, and Kodi play `.ts` files. On an Apple TV, iPhone, or iPad, use the Infuse or VLC app.
+- **HandBrake**: a free app with buttons, from [handbrake.fr](https://handbrake.fr). Choose the **Fast 1080p30** preset for an HD recording, or **Fast 576p25** for an SD recording. It does a full convert (a new picture and new sound), which takes several minutes to an hour or more for each hour of recording.
+- **ffmpeg**: a free command-line tool. A fast copy puts an hour of HD into an MP4 file in under a minute from a local drive (longer over Wi-Fi to a NAS), with no loss of quality. The result plays in QuickTime Player on a Mac:
+
+  ```sh
+  ffmpeg -fflags +genpts -i "Show - S01E02.ts" -map 0:v:0 -map 0:a -c copy -sn -dn -ignore_unknown -movflags +faststart "Show - S01E02.mp4"
+  ```
+
+The Freetvarr guide's [Converting recordings to MP4](https://furey.github.io/freetvarr/guide/leaving-fetch#converting-recordings-to-mp4) has the full steps: how to install ffmpeg on a Mac, Windows, or Linux, a full convert for files that a fast copy cannot play (such as SD channels, or recordings with an extra sound track), and commands that convert a whole folder at once.
+
+> [!WARNING]<br>
+> Download video software only from the official sites: VLC from [videolan.org](https://www.videolan.org), HandBrake from [handbrake.fr](https://handbrake.fr), and ffmpeg through Homebrew, `winget`, or your Linux package manager. Search ads and look-alike sites offer "free video converters" that can come with unwanted software or malware.
 
 ## Built on fetchtv
 
