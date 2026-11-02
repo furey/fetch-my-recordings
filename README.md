@@ -37,6 +37,7 @@ Prefer a terminal, a NAS, or Docker? See [Related projects](#related-projects).
 - [First open](#first-open)
 - [Using the app](#using-the-app)
 - [Convert to MP4](#convert-to-mp4)
+- [Watch on your TV from a USB drive](#watch-on-your-tv-from-a-usb-drive)
 - [Built on fetchtv](#built-on-fetchtv)
 - [Related projects](#related-projects)
 - [Development](#development)
@@ -361,7 +362,40 @@ The app saves each recording as a `.ts` file, exactly as the Fetch box recorded 
 The Freetvarr guide's [Converting recordings to MP4](https://furey.github.io/freetvarr/guide/leaving-fetch#converting-recordings-to-mp4) has the full steps: how to install ffmpeg on a Mac, Windows, or Linux, a full convert for files that a fast copy cannot play (such as SD channels, or recordings with an extra sound track), and commands that convert a whole folder at once.
 
 > [!WARNING]<br>
+> Renaming a `.ts` file to `.mp4` does not convert it. The file inside stays the same, and QuickTime Player will not open it.
+
+> [!WARNING]<br>
 > Download video software only from the official sites: VLC from [videolan.org](https://www.videolan.org), HandBrake from [handbrake.fr](https://handbrake.fr), and ffmpeg through Homebrew, `winget`, or your Linux package manager. Search ads and look-alike sites offer "free video converters" that can come with unwanted software or malware.
+
+## Watch on your TV from a USB drive
+
+Many TVs read a USB drive formatted as ExFAT (a drive format that holds files over 4 GB and works on both Mac and Windows). Copy the folder of recordings onto the drive, plug the drive into the TV, and open the drive from the TV's media or USB app. Check your TV's manual for the formats it reads.
+
+- **LG TVs**: LG's [help page](https://www.lg.com/us/support/help-library/lg-tv-viewing-content-on-a-usb-device--20153192465296) says to use FAT32 or NTFS. Some newer models also read ExFAT: the 2021 43UP751C manual says it can read (not write) ExFAT drives, which is enough to play files, and the 2023 UR80 manual lists FAT32, ExFAT, and NTFS. Older models such as the 2016 65UH5C do not read ExFAT, so use NTFS or FAT32 and check your TV's manual.
+- **FAT32**: a FAT32 drive cannot hold a file over 4 GB, so it does not suit HD recordings.
+- **NTFS**: a Mac cannot write to an NTFS drive without extra software.
+
+> [!WARNING]<br>
+> Formatting a drive erases everything on it. Copy off any files you want to keep first.
+
+To format a drive as ExFAT on a Mac:
+
+1. Plug the drive into the Mac and open Disk Utility (in Applications → Utilities).
+2. Choose View → Show All Devices.
+3. In the sidebar, select the drive itself (the top line, not the volume under it).
+4. Press Erase.
+5. Set Scheme to Master Boot Record.
+6. Set Format to ExFAT.
+7. Press Erase.
+
+These steps follow Apple's [Disk Utility guide](https://support.apple.com/guide/disk-utility/dskutl1010/mac).
+
+To format a drive as ExFAT on Windows:
+
+1. Plug the drive into the computer and open File Explorer.
+2. Right-click the drive and choose Format.
+3. Set File system to exFAT.
+4. Press Start.
 
 ## Built on fetchtv
 
