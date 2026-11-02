@@ -206,16 +206,25 @@ In Little Snitch, choose **Only local network** and a lasting option instead of 
 
 ### First open on Windows
 
+Microsoft Edge can stop the download with the message **Fetch-My-Recordings-Windows.exe isn't commonly downloaded. Make sure you trust Fetch-My-Recordings-Windows.exe before you open it.** Edge shows this message for new files that few people have downloaded. To keep the file:
+
+1. In the Edge downloads list, point to the file and click the **...** (More actions) button.
+2. Click **Keep**.
+3. If Edge asks again, click **Show more**.
+4. Click **Keep anyway**.
+
+To open the app after the download:
+
 1. Double-click the `.exe` file you downloaded.
-2. A blue message says Windows protected your PC. Click **More info**.
+2. If a blue message says Windows protected your PC, click **More info**. If no message appears, go to step 5.
 
    <p align="center">
      <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/first-open-windows-protected.png" alt="Illustration of the blue Windows protected your PC message, with the More info link marked" width="600"/>
      <br/><em>Illustration: Windows protected your PC</em>
    </p>
 
-3. Check that the **Publisher** line says Unknown publisher.
-4. Click **Run anyway**.
+3. If you saw the message, check that the **Publisher** line says Unknown publisher.
+4. If you saw the message, click **Run anyway**.
 
    <p align="center">
      <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/first-open-windows-run-anyway.png" alt="Illustration of the same message after More info, with the Run anyway button marked" width="600"/>
@@ -224,7 +233,7 @@ In Little Snitch, choose **Only local network** and a lasting option instead of 
 
 5. Wait for the app to install and open. It installs for your Windows user only, and it is in the Start menu after that.
 
-The first time the app searches for your Fetch box, Windows Security can ask whether to allow Fetch My Recordings on your networks:
+The first time the app searches for your Fetch box, Windows Security can show a message that asks whether to allow Fetch My Recordings on your networks. Some PCs do not show this message; if yours does not, you have nothing to do here. If the message appears:
 
 1. Tick **Private networks, such as my home or work network**.
 2. Leave **Public networks** unticked.
@@ -275,9 +284,11 @@ If the app shows nothing, check that it is not still running in the background, 
 
 On some computers, often ones with extra security software, the app's graphics process cannot start. When that happens before the window shows, the app restarts itself with safer graphics settings. There are two fallback steps: first it turns off hardware acceleration, then it also turns off the sandbox for the graphics process. The app keeps the step that worked until an app update brings a new version of Electron, the framework the app is built on.
 
-On Windows, the app also gives its sandboxed processes read access to its install folder. This fixes a folder permission problem that other apps can leave behind ([electron/electron#51761](https://github.com/electron/electron/issues/51761)).
+On Windows, the installer gives the app's sandboxed processes read access to its install folder. This fixes a folder permission problem that other apps can leave behind ([electron/electron#51761](https://github.com/electron/electron/issues/51761)). If a start closes because of that problem, the next start gives the access again.
 
-If the app still does not open, it shows a message with the log file. [Open an issue](https://github.com/furey/fetch-my-recordings/issues) and attach the file `main.log` from the log folder:
+Third-party security software, such as Malwarebytes, can stop the app before its window shows. The app is not signed, so this software does not know it. If the app closes with no window, add the install folder to the allow list of your security software (in Malwarebytes, the **Allow List**), then open the app again. The install folder is `%LOCALAPPDATA%\Programs\fetch-my-recordings`.
+
+If the window does not open on two starts in a row, the next start shows a message with the log folder. [Open an issue](https://github.com/furey/fetch-my-recordings/issues) and attach the files `main.log` and `chromium.log` (Windows only) from the log folder:
 
 | Computer | Log folder                                               |
 | -------- | -------------------------------------------------------- |
@@ -326,7 +337,13 @@ Click **How to watch your recordings** to see how to watch the files on this com
 
 If a save stops part way, or some recordings are not saved, click **Save again**. The app skips the recordings that are already in the folder and continues a part-saved recording from where it stopped. The app keeps its list of saved files in a `fetchtv.json` file in the folder, the same file the [`fetchtv` command-line tool](https://github.com/furey/fetchtv) uses. So the app and `fetchtv` can take turns on one folder.
 
-If the app says the box has no recordings, check the TV. A Fetch box whose account is cancelled shows its setup screen on the TV and lists no recordings.
+If the app cannot show the recordings, its message says why:
+
+- **The box did not send its recordings**: the box answered, but not the request for its list of recordings. This does not mean the box has no recordings. Turn the box off at the wall, wait 10 seconds, turn it on again, then click **Try again**.
+- **The box is not sharing its recordings**: check the TV. If it shows the Fetch setup or activation screen, the box has lost its Fetch service (the account is cancelled or suspended, or the box cannot reach the internet). The app cannot list the recordings until the box has its Fetch service again.
+- **No recordings on this box**: the box answered, and it has no recordings.
+
+The app writes each result to `main.log` in its [log folder](#if-the-app-does-not-open). If you ask for help, attach that file.
 
 ## Convert to MP4
 

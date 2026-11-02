@@ -10,13 +10,13 @@ export const createLaunchGuard = ({ folder, maxRung, electronVersion }) => {
     return kept?.electron === electronVersion ? kept.rung ?? 0 : 0
   }
 
-  const begin = () => {
+  const begin = (pid) => {
     const pending = readJson(pendingPath)
     const survived = pending?.electron === electronVersion
     const failedStarts = survived ? (pending.failedStarts ?? 0) + 1 : 0
     const rung = Math.min(maxRung, keptRung())
-    writeJson(pendingPath, { rung, failedStarts, electron: electronVersion, startedAt: new Date().toISOString() })
-    return { rung, failedStarts, atLastRung: rung === maxRung }
+    writeJson(pendingPath, { rung, failedStarts, electron: electronVersion, pid, startedAt: new Date().toISOString() })
+    return { rung, failedStarts, atLastRung: rung === maxRung, previousPid: survived ? pending.pid ?? null : null }
   }
 
   const keepRung = (rung) => writeJson(fallbackPath, { rung: Math.min(maxRung, rung), electron: electronVersion })
