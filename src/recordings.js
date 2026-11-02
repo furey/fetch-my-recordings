@@ -14,6 +14,7 @@ const LISTING_PROBLEMS = {
   'no-content-directory': 'no-answer',
   'browse-failed': 'no-answer',
   'recordings-browse-failed': 'no-answer',
+  'items-browse-failed': 'no-answer',
   'no-recordings-folder': 'not-sharing'
 }
 
