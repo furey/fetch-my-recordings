@@ -847,7 +847,8 @@ const whatNowBody = (id) => {
   }
   if (id === 'tv') {
     return [h('ul', { className: 'options' },
-      h('li', {}, h('strong', {}, 'USB drive. '), 'Copy the folder to a USB drive for a TV or media player that plays .ts files.'),
+      h('li', {}, h('strong', {}, 'USB drive. '), 'Format the USB drive as ExFAT, copy the folder to it, then plug it into a TV or media player that plays .ts files.',
+        h('p', { className: 'option-action' }, linkButton({ label: 'How to format a USB drive', name: 'usb' }))),
       h('li', {}, h('strong', {}, 'Apple TV, phone or tablet. '), 'Open them in Infuse or VLC from a shared folder.'),
       h('li', {}, h('strong', {}, 'Plex, Jellyfin or Kodi. '), state.forPlex
         ? 'Add the folder to your library. The files already have the names these apps need.'
