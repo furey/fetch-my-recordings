@@ -18,7 +18,8 @@ const APP_REPOSITORY_URL = 'https://github.com/furey/fetch-my-recordings'
 const FETCHTV_REPOSITORY_URL = 'https://github.com/furey/fetchtv'
 const EXTERNAL_LINKS = {
   vlc: 'https://www.videolan.org/vlc/',
-  freetvarr: 'https://furey.github.io/freetvarr/'
+  freetvarr: 'https://furey.github.io/freetvarr/',
+  mp4: 'https://furey.github.io/freetvarr/guide/leaving-fetch#converting-recordings-to-mp4'
 }
 const ISSUES_URL = 'https://github.com/furey/fetch-my-recordings/issues'
 const SHOW_FALLBACK_MS = 10000
