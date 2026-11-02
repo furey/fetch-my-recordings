@@ -128,19 +128,19 @@ Your steps depend on your macOS version. To check it, open the Apple menu and ch
 9. Type your Mac login password when your Mac asks.
 10. Click **Modify Settings**.
 
-   <p align="center">
+    <p align="center">
      <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/first-open-mac14-3-password.png" alt="Illustration of the Mac password prompt with the Modify Settings button marked" width="600"/>
      <br/><em>Illustration: the password prompt</em>
-   </p>
+    </p>
 
- 1. Click **Open** in the message that appears next.
+11. Click **Open** in the message that appears next.
 
-   <p align="center">
+    <p align="center">
      <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/first-open-mac14-4-open.png" alt="Illustration of the same macOS message with Open, Show in Finder, and Cancel buttons, with the Open button marked" width="600"/>
      <br/><em>Illustration: the second macOS message</em>
-   </p>
+    </p>
 
- 1. Wait for the app to open.
+12. Wait for the app to open.
 
 The **Open Anyway** button stays for about one hour after you first try to open the app. If it is gone, do steps 3 and 4 again, then continue from step 5.
 
