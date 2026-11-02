@@ -293,6 +293,39 @@ test('a box that fails the Recordings request asks for a restart, not an empty l
   }
 })
 
+test('a box that fails the root folder request asks for a restart, not an empty list', async () => {
+  const box = await startFakeBox({ failingBrowses: ['0'] })
+  const userData = await freshDir('user-data-root-no-answer')
+  await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify({ lastAddress: box.address }))
+  const app = await launchApp({ userData })
+  try {
+    const page = await openApp(app)
+    await page.getByRole('heading', { name: 'The box did not send its recordings' }).waitFor({ timeout: 60000 })
+    assert.equal(await page.getByRole('heading', { name: 'No recordings on this box' }).count(), 0)
+    assert.match(await readMainLog(userData), /Listed recordings from box 127\.0\.0\.1: browse-failed\. Error: .*500/)
+  } finally {
+    await app.close()
+    await box.stop()
+  }
+})
+
+test('a box that fails every show request asks for a restart, not an empty list', async () => {
+  const shows = demoShows().slice(0, 2)
+  const box = await startFakeBox({ shows, failingBrowses: ['100', '101'] })
+  const userData = await freshDir('user-data-shows-no-answer')
+  await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify({ lastAddress: box.address }))
+  const app = await launchApp({ userData })
+  try {
+    const page = await openApp(app)
+    await page.getByRole('heading', { name: 'The box did not send its recordings' }).waitFor({ timeout: 60000 })
+    assert.equal(await page.getByRole('heading', { name: 'No recordings on this box' }).count(), 0)
+    assert.match(await readMainLog(userData), /Listed recordings from box 127\.0\.0\.1: items-browse-failed\. Error: .*500/)
+  } finally {
+    await app.close()
+    await box.stop()
+  }
+})
+
 const readMainLog = (userData) => fs.readFile(path.join(userData, 'logs', 'main.log'), 'utf8').catch(() => '')
 
 test('saved recordings: still there is unticked, moved or deleted is ticked with the reason, new is ticked', async () => {

@@ -465,8 +465,8 @@ const registerIpc = ({ settings, history }) => {
     const location = state.boxes.get(boxId)
     if (!location) return { error: 'unknown-box' }
     const onProgress = (progress) => send('recordings:progress', progress)
-    const address = new URL(location.url).hostname
     try {
+      const address = new URL(location.url).hostname
       const { shows, summaries, outcome } = await listRecordings({ location, onProgress })
       state.log.write(describeListing({ address, ...outcome }))
       const problem = listingProblemFor(outcome.outcome)
@@ -485,7 +485,7 @@ const registerIpc = ({ settings, history }) => {
       await settings.update({ lastAddress: box.address })
       return { shows: state.summaries }
     } catch (error) {
-      state.log.write(`Could not list recordings from box ${address}: ${describeError(error)}`)
+      state.log.write(`Could not list recordings from box ${location.url}: ${describeError(error)}`)
       return { error: 'list-failed' }
     }
   })
