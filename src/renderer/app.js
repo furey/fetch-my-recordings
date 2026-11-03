@@ -389,7 +389,8 @@ const emptyListScreen = () => ({
 const emptyInfo = () => openInfo({
   title: 'No recordings on this box',
   body: [
-    h('p', { id: 'empty-reason' }, 'The box answered, and it has no recordings.')
+    h('p', { id: 'empty-reason' }, 'The box answered, and it has no recordings.'),
+    h('p', {}, 'If your TV shows Fetch’s setup or activation screen, the box has lost its Fetch service. A box in that state shows no recordings.')
   ]
 })
 
