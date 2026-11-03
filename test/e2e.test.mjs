@@ -236,6 +236,126 @@ test('a recording the box keeps cutting off is listed as not saved, with a plain
   }
 })
 
+const BOX_WAIT_ENV = { FETCHTV_BOX_PROBE_DELAYS_MS: '300,300,300' }
+const boxWaitShows = () => [{
+  title: 'Master Cook',
+  items: [
+    { title: 'S1 E1 - Auditions', size: 32 * MB, duration: '0:58:12' },
+    { title: 'S1 E2 - Mystery Box', size: 32 * MB, duration: '0:57:40' },
+    { title: 'S1 E3 - Team Challenge', size: 2 * MB, duration: '0:59:03' }
+  ]
+}]
+
+const startBoxWaitSave = async ({ name, env = {} }) => {
+  const box = await startFakeBox({ shows: boxWaitShows(), quirks: { rangeNotSatisfiable: false }, bytesPerSecond: 4 * MB })
+  const userData = await freshDir(`user-data-${name}`)
+  const saveFolder = await freshDir(name)
+  await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify({ lastAddress: box.address, lastFolder: saveFolder }))
+  const app = await launchApp({ userData, env: { ...BOX_WAIT_ENV, ...env } })
+  const page = await openApp(app)
+  await page.getByRole('heading', { name: 'Choose recordings' }).waitFor()
+  await page.getByRole('button', { name: 'Next' }).click()
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+  await page.getByRole('heading', { name: 'Saving', exact: true }).waitFor()
+  await page.locator('.status', { hasText: / MB of / }).first().waitFor()
+  await page.waitForTimeout(1000)
+  await recordOverallLine(page)
+  return { box, app, page, saveFolder }
+}
+
+const recordOverallLine = (page) => page.evaluate(() => {
+  const line = document.getElementById('overall-line')
+  const log = [{ at: performance.now(), text: line.textContent }]
+  window.overallLineLog = log
+  new MutationObserver(() => {
+    if (log.at(-1).text !== line.textContent) log.push({ at: performance.now(), text: line.textContent })
+  }).observe(line, { subtree: true, childList: true, characterData: true })
+})
+
+const overallLineLog = (page) => page.evaluate(() => window.overallLineLog)
+
+const rowStatus = (page, title) => page.locator('li.save-row', { hasText: title }).locator('.status').textContent()
+
+test('box wait: a box that restarts mid-save is waited for, then every recording is saved', async () => {
+  const { box, app, page, saveFolder } = await startBoxWaitSave({ name: 'box-restart' })
+  try {
+    box.powerOff()
+    const line = page.locator('#overall-line')
+    await line.filter({ hasText: 'Waiting for the Fetch box to answer…' }).waitFor({ timeout: 15000 })
+    assert.equal(await line.getAttribute('role'), 'status')
+    assert.equal(await page.locator('#overall-line.is-box-state').count(), 1)
+    const percentWhileWaiting = await page.locator('#overall-percent').textContent()
+    await page.locator('li.save-row .status', { hasText: 'Box not answering' }).first().waitFor()
+    assert.equal(await rowStatus(page, 'S1 E3 - Team Challenge'), 'Waiting')
+    await page.waitForTimeout(1000)
+    assert.equal(await page.locator('#overall-percent').textContent(), percentWhileWaiting)
+    await box.powerOn()
+    await line.filter({ hasText: 'The box is answering again.' }).waitFor({ timeout: 15000 })
+    await line.filter({ hasText: / done · / }).waitFor({ timeout: 15000 })
+    await waitForFinish({ page, heading: 'All done', timeout: 60000 })
+
+    const log = await overallLineLog(page)
+    for (const text of ['Waiting for the Fetch box to answer…', 'The box is answering again.']) {
+      const index = log.findIndex(entry => entry.text === text)
+      assert.ok(index >= 0 && index < log.length - 1, `"${text}" did not show and then go away in ${JSON.stringify(log.map(entry => entry.text))}`)
+      assert.ok(log[index + 1].at - log[index].at >= 1950, `"${text}" showed for under 2 s`)
+    }
+    for (const title of ['S1 E1 - Auditions', 'S1 E2 - Mystery Box', 'S1 E3 - Team Challenge']) {
+      await assertSameBytes({ box, folder: saveFolder, file: `Master Cook/${title}.ts`, title })
+    }
+    assert.ok(box.requests.some(request => request.range && request.range !== 'bytes=0-' && request.range !== 'bytes=0-0'), 'no recording resumed with a Range request')
+  } finally {
+    await app.close()
+    await box.stop()
+  }
+})
+
+test('box wait: a box that stays off fails the rest with a plain reason, and Save again finds it and lists again first', async () => {
+  const { box, app, page, saveFolder } = await startBoxWaitSave({ name: 'box-gone', env: { FETCHTV_BOX_WAIT_MS: '900' } })
+  try {
+    box.powerOff()
+    await waitForFinish({ page, heading: 'Some not saved', timeout: 30000 })
+    await page.locator('.stat[data-list="not-saved"]').click()
+    const dialog = page.locator('#info-dialog')
+    await dialog.locator('.problem-row .row-main').first().click()
+    await dialog.getByText('The box did not answer for 10 minutes. Check whether it is in standby. If it is, turn it on with its remote. Also check that this computer is on the same network. Then save again.').first().waitFor()
+    await page.keyboard.press('Escape')
+    await dialog.waitFor({ state: 'hidden' })
+
+    await box.powerOn()
+    await recordScreens(page)
+    await page.getByRole('button', { name: 'Save again' }).click()
+    await waitForFinish({ page, heading: 'All done', timeout: 60000 })
+    const screens = (await screenLog(page)).map(entry => entry.text)
+    const order = ['Looking for your Fetch box', 'Reading your recordings', 'Saving'].map(heading => screens.findIndex(text => text.startsWith(heading)))
+    assert.ok(order.every((index, position) => index >= 0 && (position === 0 || index > order[position - 1])), `screens were ${JSON.stringify(screens)}`)
+    for (const title of ['S1 E1 - Auditions', 'S1 E2 - Mystery Box', 'S1 E3 - Team Challenge']) {
+      await assertSameBytes({ box, folder: saveFolder, file: `Master Cook/${title}.ts`, title })
+    }
+  } finally {
+    await app.close()
+    await box.stop()
+  }
+})
+
+test('box wait: Stop while waiting for the box ends the save at once and keeps the partial files', async () => {
+  const { box, app, page, saveFolder } = await startBoxWaitSave({ name: 'box-stop' })
+  try {
+    box.powerOff()
+    await page.locator('#overall-line', { hasText: 'Waiting for the Fetch box to answer…' }).waitFor({ timeout: 15000 })
+    const stoppedAt = Date.now()
+    await page.getByRole('button', { name: 'Stop', exact: true }).click()
+    await page.getByRole('heading', { name: 'Stopped', exact: true }).waitFor({ timeout: 5000 })
+    assert.ok(Date.now() - stoppedAt < 3000, 'Stop took more than 3 s during the wait')
+    const files = await listFiles(saveFolder)
+    assert.ok(files.some(file => file.endsWith('.ts.part')), `no partial file in ${files.join(', ')}`)
+    assert.equal(files.some(file => file.endsWith('.lock')), false)
+  } finally {
+    await app.close()
+    await box.stop()
+  }
+})
+
 test('a box with no recordings explains why the list is empty', async () => {
   const box = await startFakeBox({ shows: [] })
   const userData = await freshDir('user-data-empty')
@@ -544,7 +664,7 @@ test('the window is locked down: isolated, sandboxed, no Node in the page, stric
     }))
     assert.equal(pageGlobals.require, 'undefined')
     assert.equal(pageGlobals.process, 'undefined')
-    assert.ok(pageGlobals.api.every(name => typeof name === 'string') && pageGlobals.api.length === 16)
+    assert.ok(pageGlobals.api.every(name => typeof name === 'string') && pageGlobals.api.length === 18)
     const inlineScriptRan = await page.evaluate(() => new Promise(resolve => {
       window.inlineRan = false
       const script = document.createElement('script')
@@ -828,12 +948,13 @@ const assertShownFor = ({ log, text, ms }) => {
   assert.ok(shown >= ms, `"${text}" showed for ${Math.round(shown)} ms, under ${ms} ms`)
 }
 
-const launchApp = async ({ userData, discovery = false }) => {
+const launchApp = async ({ userData, discovery = false, env: extraEnv = {} }) => {
   const env = {
     ...process.env,
     FETCHTV_USER_DATA: userData,
     FETCHTV_DISCOVERY: discovery ? 'on' : 'off',
-    FETCHTV_RETRY_DELAYS_MS: '50,50'
+    FETCHTV_RETRY_DELAYS_MS: '50,50',
+    ...extraEnv
   }
   const app = packagedExecutable
     ? await electron.launch({ executablePath: packagedExecutable, env })

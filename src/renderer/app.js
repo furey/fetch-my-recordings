@@ -25,6 +25,11 @@ const state = {
 }
 
 const MINIMUM_BUSY_MS = 900
+const BOX_LINE_MINIMUM_MS = 2000
+const BOX_STATE_LINES = {
+  waiting: 'Waiting for the Fetch box to answer…',
+  answering: 'The box is answering again.'
+}
 const BACKGROUND_SEARCH_FRESH_MS = 10000
 
 const start = async () => {
@@ -40,6 +45,8 @@ const start = async () => {
   api.onListProgress(showListProgress)
   api.onSaveProgress(updateSaveProgress)
   api.onSaveResult(updateSaveResult)
+  api.onSaveBoxState(updateBoxState)
+  api.onSaveRetry(updateSaveRetry)
   showWelcome()
 }
 
@@ -110,7 +117,7 @@ const chooseBox = (box) => {
   useBox(box)
 }
 
-const useBox = async (box) => {
+const useBox = async (box, { thenSave = null } = {}) => {
   state.box = box
   state.shows = []
   state.selected = new Set()
@@ -126,6 +133,7 @@ const useBox = async (box) => {
   if (result.problem === 'no-answer') return showScreen(2, boxDidNotAnswerScreen())
   if (result.problem === 'not-sharing') return showScreen(2, notSharingScreen())
   state.shows = result.shows
+  if (thenSave) return saveSameRecordings(thenSave)
   state.selected = new Set(savableEpisodes(state.shows).filter(isWanted).map(episode => episode.id))
   showScreen(2, state.shows.length === 0 ? emptyListScreen() : recordingsScreen())
 }
@@ -181,6 +189,10 @@ const beginSave = async () => {
     rows: new Map(order.map(episode => [episode.id, { status: 'waiting', bytes: 0, total: episode.size, firstBytes: null, reason: '' }])),
     elements: new Map(),
     startedAt: Date.now(),
+    waitedMs: 0,
+    waitStartedAt: null,
+    boxGaveUp: false,
+    line: { mode: 'progress', since: 0, queue: [], timer: null },
     summary: null
   }
   state.saving = true
@@ -711,7 +723,7 @@ const savingScreen = () => {
       headingWithInfo({ text: 'Saving', info: savingInfo }),
       h('div', { className: 'overall' },
         h('span', { className: 'overall-percent', id: 'overall-percent' }, '0%'),
-        h('span', { className: 'overall-text', id: 'overall-line' }, '')),
+        h('span', { className: 'overall-text', id: 'overall-line', role: 'status', 'aria-live': 'off' }, '')),
       h('div', { className: 'progress is-overall', role: 'progressbar', 'aria-label': 'All recordings', id: 'overall-bar' }, h('span', {})),
       list
     ],
@@ -746,6 +758,7 @@ const updateSaveProgress = ({ id, bytes, total }) => {
   if (!row || isFinal(row.status)) return
   if (row.firstBytes === null) row.firstBytes = bytes
   row.status = 'saving'
+  row.isStalled = false
   row.bytes = bytes
   row.total = total > 1 ? total : row.total
   const elements = state.save.elements.get(id)
@@ -773,6 +786,85 @@ const updateSaveResult = ({ id, status, reason }) => {
   refreshOverall()
 }
 
+const updateSaveRetry = ({ id }) => {
+  const row = state.save?.rows.get(id)
+  if (!row || isFinal(row.status)) return
+  setRowStatus({ id, text: 'Trying again', className: 'status' })
+}
+
+const updateBoxState = ({ state: boxState }) => {
+  const save = state.save
+  if (!save) return
+  if (boxState === 'lost') {
+    save.waitStartedAt = Date.now()
+    markStalledRows(save)
+    showOverallLine({ save, mode: 'waiting' })
+    return
+  }
+  endWait(save)
+  if (boxState === 'gave-up') {
+    save.boxGaveUp = true
+    return
+  }
+  resumeStalledRows(save)
+  showOverallLine({ save, mode: 'answering' })
+  showOverallLine({ save, mode: 'progress' })
+}
+
+const endWait = (save) => {
+  if (save.waitStartedAt === null) return
+  save.waitedMs += Date.now() - save.waitStartedAt
+  save.waitStartedAt = null
+}
+
+const markStalledRows = (save) => {
+  for (const [id, row] of save.rows) {
+    if (row.status !== 'saving') continue
+    row.isStalled = true
+    setRowStatus({ id, text: 'Box not answering', className: 'status' })
+  }
+}
+
+const resumeStalledRows = (save) => {
+  for (const [id, row] of save.rows) {
+    if (!row.isStalled || row.status !== 'saving') continue
+    row.isStalled = false
+    setRowStatus({ id, text: `${formatBytes(row.bytes)} of ${formatBytes(row.total)}`, className: 'status is-saving' })
+  }
+}
+
+const setRowStatus = ({ id, text, className }) => {
+  const elements = state.save.elements.get(id)
+  if (!elements) return
+  elements.status.textContent = text
+  elements.status.className = className
+}
+
+const showOverallLine = ({ save, mode }) => {
+  const line = save.line
+  if (mode === 'waiting') line.queue = line.queue.filter(queued => queued !== 'progress')
+  if ((line.queue.at(-1) ?? line.mode) === mode) return
+  line.queue.push(mode)
+  advanceOverallLine(save)
+}
+
+const advanceOverallLine = (save) => {
+  const line = save.line
+  if (line.timer || line.queue.length === 0 || state.save !== save) return
+  const remaining = line.mode === 'progress' ? 0 : BOX_LINE_MINIMUM_MS - (Date.now() - line.since)
+  if (remaining > 0) {
+    line.timer = setTimeout(() => {
+      line.timer = null
+      advanceOverallLine(save)
+    }, remaining)
+    return
+  }
+  line.mode = line.queue.shift()
+  line.since = Date.now()
+  refreshOverall()
+  advanceOverallLine(save)
+}
+
 const refreshOverall = () => {
   const rows = [...state.save.rows.values()]
   const total = rows.reduce((sum, row) => sum + row.total, 0)
@@ -781,16 +873,27 @@ const refreshOverall = () => {
   const line = document.getElementById('overall-line')
   const bar = document.getElementById('overall-bar')
   if (!line || !bar) return
+  const mode = state.save.line.mode
+  if (mode === 'waiting') return setOverallLine({ line, text: BOX_STATE_LINES.waiting, isBoxState: true })
   const share = percent(done, total)
   document.getElementById('overall-percent').textContent = `${Math.floor(share)}%`
-  const eta = timeLeft({ rows, total, done })
-  line.textContent = [`${finished} of ${rows.length} done`, `${formatBytes(done)} of ${formatBytes(total)}`, eta].filter(Boolean).join(' · ')
   bar.firstChild.style.width = `${share}%`
   bar.setAttribute('aria-valuenow', String(Math.round(share)))
+  if (mode === 'answering') return setOverallLine({ line, text: BOX_STATE_LINES.answering, isBoxState: true })
+  const eta = timeLeft({ rows, total, done })
+  setOverallLine({ line, text: [`${finished} of ${rows.length} done`, `${formatBytes(done)} of ${formatBytes(total)}`, eta].filter(Boolean).join(' · '), isBoxState: false })
+}
+
+const setOverallLine = ({ line, text, isBoxState }) => {
+  if (line.textContent !== text) line.textContent = text
+  line.classList.toggle('is-box-state', isBoxState)
+  line.setAttribute('aria-live', isBoxState ? 'polite' : 'off')
 }
 
 const timeLeft = ({ rows, total, done }) => {
-  const elapsed = (Date.now() - state.save.startedAt) / 1000
+  const now = Date.now()
+  const waiting = state.save.waitedMs + (state.save.waitStartedAt === null ? 0 : now - state.save.waitStartedAt)
+  const elapsed = (now - state.save.startedAt - waiting) / 1000
   const copied = rows.reduce((sum, row) => sum + (row.firstBytes === null ? 0 : Math.max(0, Math.min(row.bytes, row.total) - row.firstBytes)), 0)
   if (elapsed < 10 || copied <= 0) return ''
   const seconds = (total - done) / (copied / elapsed)
@@ -821,7 +924,7 @@ const finishedScreen = () => {
       h('button', { type: 'button', className: `btn${remaining > 0 ? '' : ' primary'}`, id: 'open-folder', onclick: () => api.openSavedFolder() }, 'Open folder'),
       h('span', { className: 'spacer' }),
       h('button', { type: 'button', className: 'btn quiet', onclick: () => useBox(state.box) }, 'Choose other recordings'),
-      h('button', { type: 'button', className: `btn${remaining > 0 ? ' primary' : ''}`, id: 'save-again', onclick: beginSave }, 'Save again')
+      h('button', { type: 'button', className: `btn${remaining > 0 ? ' primary' : ''}`, id: 'save-again', onclick: saveAgain }, 'Save again')
     ]
   }
 }
@@ -960,8 +1063,35 @@ const resultRow = (episode) => {
 
 const saveAgainFromDialog = () => {
   closeInfo()
+  saveAgain()
+}
+
+const saveAgain = () => (state.save?.boxGaveUp ? saveAgainAfterLostBox() : beginSave())
+
+const saveAgainAfterLostBox = async () => {
+  const wanted = recordingKeys(state.selected)
+  const visit = showScreen(1, searchingScreen())
+  const boxes = await withMinimumDuration(findBoxesWithRetry({ wholeNetwork: false }))
+  if (!isCurrentVisit(visit)) return
+  state.boxes = boxes
+  const sameBox = boxes.find(box => box.key === state.box?.key)
+  sounds.play(sameBox ? 'found' : 'failed')
+  if (!sameBox) return showScreen(1, boxes.length === 0 ? notFoundScreen() : chooseBoxScreen())
+  useBox(sameBox, { thenSave: wanted })
+}
+
+const saveSameRecordings = (wanted) => {
+  const episodes = state.shows.flatMap(show => show.episodes.filter(episode => wanted.has(recordingKey({ show, episode }))))
+  state.selected = new Set(savableEpisodes(state.shows).filter(episode => episodes.includes(episode)).map(episode => episode.id))
+  if (state.selected.size === 0) return showScreen(2, recordingsScreen())
   beginSave()
 }
+
+const recordingKeys = (episodeIds) => new Set(state.shows.flatMap(show => show.episodes
+  .filter(episode => episodeIds.has(episode.id))
+  .map(episode => recordingKey({ show, episode }))))
+
+const recordingKey = ({ show, episode }) => `${show.title}\n${episode.title}`
 
 const saveErrorScreen = () => ({
   content: [

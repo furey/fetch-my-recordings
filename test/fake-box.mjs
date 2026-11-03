@@ -125,10 +125,15 @@ export const startFakeBox = async ({
     port: actualPort,
     requests,
     catalogue,
+    powerOff: () => {
+      server.closeAllConnections()
+      server.close()
+    },
+    powerOn: () => new Promise(resolve => server.listen(actualPort, host, resolve)),
     stop: async () => {
       ssdpServer?.stop()
       server.closeAllConnections()
-      await new Promise(resolve => server.close(resolve))
+      if (server.listening) await new Promise(resolve => server.close(resolve))
     }
   }
 }

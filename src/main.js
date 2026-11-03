@@ -558,7 +558,13 @@ const runSave = async ({ recordings, folder, forPlex, copyAgain, history }) => {
     forPlex,
     copyAgain,
     retryDelays: retryDelaysFromEnv(),
+    ...boxWaitFromEnv(),
     onProgress: ({ id, bytes, total }) => send('save:progress', { id: String(id), bytes, total }),
+    onBoxState: ({ state: boxState }) => {
+      state.log.write(`Box during the save: ${boxState}`)
+      send('save:box', { state: boxState })
+    },
+    onRetry: (retry) => send('save:retry', retry),
     onResult: (result) => send('save:result', result)
   })
   state.activeSave = save
@@ -634,8 +640,18 @@ const safePath = (name) => {
   }
 }
 
-const retryDelaysFromEnv = () => {
-  const text = process.env.FETCHTV_RETRY_DELAYS_MS
+const retryDelaysFromEnv = () => millisecondListFromEnv('FETCHTV_RETRY_DELAYS_MS')
+
+const boxWaitFromEnv = () => {
+  const boxWaitMs = Number(process.env.FETCHTV_BOX_WAIT_MS)
+  return {
+    boxWaitMs: boxWaitMs > 0 ? boxWaitMs : undefined,
+    probeDelays: millisecondListFromEnv('FETCHTV_BOX_PROBE_DELAYS_MS')
+  }
+}
+
+const millisecondListFromEnv = (name) => {
+  const text = process.env[name]
   if (!text) return undefined
   return text.split(',').map(Number).filter(Number.isFinite)
 }
