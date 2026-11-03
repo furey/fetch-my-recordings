@@ -20,7 +20,7 @@ const main = async () => {
   await fs.mkdir(userData, { recursive: true })
   await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify({ lastAddress: '192.0.2.1', lastFolder: folder }))
   if (values.shots) await fs.mkdir(values.shots, { recursive: true })
-  const app = await electron.launch({ args: [appRoot], cwd: appRoot, env: { ...process.env, FETCHTV_USER_DATA: userData, FETCHTV_DISCOVERY: 'off', FETCHTV_RETRY_DELAYS_MS: '50,50' } })
+  const app = await electron.launch({ args: [appRoot], cwd: appRoot, env: { ...process.env, FETCHTV_USER_DATA: userData, FETCHTV_DISCOVERY: 'off', FETCHTV_RETRY_DELAYS_MS: '50,50', FMR_QUIET_WINDOW: '1' } })
   const found = []
   try {
     const page = await app.firstWindow()

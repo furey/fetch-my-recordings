@@ -63,7 +63,7 @@ const main = async () => {
   const settings = values.take === 'not-found' ? { lastFolder: saveFolder } : { lastAddress: box.address, lastFolder: saveFolder }
   await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify(settings))
   const schedule = values.schedule ? JSON.parse(await fs.readFile(path.resolve(values.schedule), 'utf8')) : {}
-  const env = { ...process.env, FETCHTV_USER_DATA: userData, FETCHTV_DISCOVERY: 'off' }
+  const env = { ...process.env, FETCHTV_USER_DATA: userData, FETCHTV_DISCOVERY: 'off', FMR_QUIET_WINDOW: '1' }
   const app = values.executable
     ? await electron.launch({ executablePath: values.executable, env })
     : await electron.launch({ args: [appRoot], cwd: appRoot, env })
