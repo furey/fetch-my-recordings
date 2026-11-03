@@ -502,9 +502,10 @@ const registerIpc = ({ settings, history }) => {
     return { folder: filePaths[0] }
   })
 
-  handle('folder:describe', async ({ folder, episodeIds }) => {
+  handle('folder:describe', async ({ folder, forPlex, copyAgain, episodeIds }) => {
     if (!isUsableFolder(folder)) return { error: 'invalid-folder' }
-    return describeFolder({ folder, items: selectedItems(episodeIds) })
+    const recordings = pickEpisodes({ shows: state.shows, episodeIds: toIdList(episodeIds) })
+    return describeFolder({ folder, recordings, forPlex: Boolean(forPlex), copyAgain: Boolean(copyAgain) })
   })
 
   handle('save:start', async ({ folder, forPlex, copyAgain, episodeIds }) => {
@@ -614,11 +615,6 @@ const send = (channel, payload) => {
 const rememberBox = (location) => {
   state.boxes.set(location.url, location)
   return describeBox(location)
-}
-
-const selectedItems = (episodeIds) => {
-  const wanted = new Set(toIdList(episodeIds))
-  return state.summaries.flatMap(show => show.episodes).filter(episode => wanted.has(episode.id))
 }
 
 const toIdList = (ids) => (Array.isArray(ids) ? ids : []).map(String)

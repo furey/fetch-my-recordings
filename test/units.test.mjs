@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { parseBoxAddress, describeBox, findBoxes } from '../src/boxes.js'
 import { FETCH_MANUFACTURER_URL, MEDIA_SERVER_TARGET, parseSearchResponse, searchForFetchBoxes } from '../src/discovery.js'
 import { plainReason, summariseResults } from '../src/saving.js'
+import { describeFolder } from '../src/folders.js'
 import { describeListing, listingProblemFor } from '../src/recordings.js'
 import { createInstallAccessRecord, previousStartFailedAccessCheck } from '../src/install-access.js'
 import { createLaunchGuard } from '../src/launch-guard.js'
@@ -174,4 +175,28 @@ test('listing: the log line names the box IP, the outcome, and any error or fold
     'Listed recordings from box 192.168.1.50: browse-failed. Error: Request failed with status code 500.')
   assert.equal(describeListing({ address: '192.168.1.50', outcome: 'no-recordings-folder', folders: [] }),
     'Listed recordings from box 192.168.1.50: no-recordings-folder. The box listed these folders: none.')
+})
+
+test('folder: counts as already saved only what the save will skip', async () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'fmr-folder-'))
+  const item = (id, title) => ({ id, title, size: 2048, ext: 'ts', season_number: '1', season_number_padded: '01', episode_number: id, episode_number_padded: id.padStart(2, '0') })
+  const recordings = [{ title: 'Bluey', items: [item('1', 'S1 E1 - Saved'), item('2', 'S1 E2 - Missing'), item('3', 'S1 E3 - New')] }]
+  fs.mkdirSync(path.join(folder, 'Bluey'))
+  fs.writeFileSync(path.join(folder, 'Bluey', 'S1 E1 - Saved.ts'), Buffer.alloc(2048))
+  fs.writeFileSync(path.join(folder, 'fetchtv.json'), JSON.stringify({
+    1: { title: 'S1 E1 - Saved', size: 2048, path: 'Bluey/S1 E1 - Saved.ts' },
+    2: { title: 'S1 E2 - Missing', size: 2048, path: 'Bluey/S1 E2 - Missing.ts' }
+  }))
+  try {
+    const plain = await describeFolder({ folder, recordings })
+    assert.equal(plain.alreadySavedCount, 1)
+    assert.equal(plain.toSaveCount, 2)
+    assert.equal(plain.neededBytes, 4096)
+    assert.equal((await describeFolder({ folder, recordings, forPlex: true })).alreadySavedCount, 1)
+    const again = await describeFolder({ folder, recordings, forPlex: true, copyAgain: true })
+    assert.equal(again.alreadySavedCount, 0)
+    assert.equal(again.toSaveCount, 3)
+  } finally {
+    fs.rmSync(folder, { recursive: true, force: true })
+  }
 })

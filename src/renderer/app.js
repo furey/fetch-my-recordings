@@ -160,7 +160,7 @@ const refreshFolderInfo = async () => {
   const check = ++state.folderCheck
   state.folderInfo = null
   renderFolderInfo()
-  const info = await withMinimumDuration(api.describeFolder({ folder: state.folder, episodeIds: [...state.selected] }))
+  const info = await withMinimumDuration(api.describeFolder({ folder: state.folder, forPlex: state.forPlex, copyAgain: state.copyAgain, episodeIds: [...state.selected] }))
   if (check !== state.folderCheck) return
   state.folderInfo = info.error ? null : info
   renderFolderInfo()
@@ -612,6 +612,7 @@ const folderScreen = () => {
   plexSwitch.addEventListener('click', () => {
     state.forPlex = !state.forPlex
     plexSwitch.setAttribute('aria-checked', String(state.forPlex))
+    if (state.copyAgain) refreshFolderInfo()
   })
   return {
     content: [
