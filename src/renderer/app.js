@@ -1081,17 +1081,35 @@ const saveAgainAfterLostBox = async () => {
 }
 
 const saveSameRecordings = (wanted) => {
-  const episodes = state.shows.flatMap(show => show.episodes.filter(episode => wanted.has(recordingKey({ show, episode }))))
-  state.selected = new Set(savableEpisodes(state.shows).filter(episode => episodes.includes(episode)).map(episode => episode.id))
-  if (state.selected.size === 0) return showScreen(2, recordingsScreen())
+  const left = new Map(wanted)
+  const matched = state.shows.flatMap(show => show.episodes
+    .filter(episode => !episode.stillRecording)
+    .filter(episode => takeOne({ left, key: recordingKey({ show, episode }) })))
+  state.selected = new Set(matched.map(episode => episode.id))
+  const isEveryRecordingFound = [...left.values()].every(count => count === 0)
+  if (!isEveryRecordingFound || state.selected.size === 0) return showScreen(2, recordingsScreen())
   beginSave()
 }
 
-const recordingKeys = (episodeIds) => new Set(state.shows.flatMap(show => show.episodes
-  .filter(episode => episodeIds.has(episode.id))
-  .map(episode => recordingKey({ show, episode }))))
+const takeOne = ({ left, key }) => {
+  const count = left.get(key) ?? 0
+  if (count === 0) return false
+  left.set(key, count - 1)
+  return true
+}
 
-const recordingKey = ({ show, episode }) => `${show.title}\n${episode.title}`
+const recordingKeys = (episodeIds) => {
+  const counts = new Map()
+  for (const show of state.shows) {
+    for (const episode of show.episodes.filter(episode => episodeIds.has(episode.id))) {
+      const key = recordingKey({ show, episode })
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+    }
+  }
+  return counts
+}
+
+const recordingKey = ({ show, episode }) => `${show.title}\n${episode.title}\n${episode.size}`
 
 const saveErrorScreen = () => ({
   content: [

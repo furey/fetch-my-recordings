@@ -338,6 +338,67 @@ test('box wait: a box that stays off fails the rest with a plain reason, and Sav
   }
 })
 
+const loseBoxDuringSave = async ({ name, shows, select }) => {
+  const box = await startFakeBox({ shows, quirks: { rangeNotSatisfiable: false }, bytesPerSecond: 2 * MB })
+  const userData = await freshDir(`user-data-${name}`)
+  const saveFolder = await freshDir(name)
+  await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify({ lastAddress: box.address, lastFolder: saveFolder }))
+  const app = await launchApp({ userData, env: { ...BOX_WAIT_ENV, FETCHTV_BOX_WAIT_MS: '900' } })
+  const page = await openApp(app)
+  await page.getByRole('heading', { name: 'Choose recordings' }).waitFor()
+  await select(page)
+  await page.getByRole('button', { name: 'Next' }).click()
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+  await page.locator('.status', { hasText: / MB of / }).first().waitFor()
+  box.powerOff()
+  await waitForFinish({ page, heading: 'Some not saved', timeout: 30000 })
+  return { box, app, page }
+}
+
+const tickOnly = async ({ page, show, count }) => {
+  await page.getByRole('button', { name: 'Select none' }).click()
+  const row = page.locator(`li.show-row[data-show="${show}"]`)
+  await row.locator('.row-main').first().click()
+  const boxes = row.locator('li.episode-row input[type="checkbox"]')
+  for (let index = 0; index < count; index++) await boxes.nth(index).check()
+}
+
+test('box wait: Save again picks the same number of same-title recordings as before', async () => {
+  const shows = [{ title: 'Seven News', items: Array.from({ length: 10 }, () => ({ title: 'Seven News', size: 6 * MB, duration: '0:30:00' })) }]
+  const { box, app, page } = await loseBoxDuringSave({ name: 'same-title', shows, select: (page) => tickOnly({ page, show: 'Seven News', count: 2 }) })
+  try {
+    await box.powerOn()
+    await page.getByRole('button', { name: 'Save again' }).click()
+    await page.getByRole('heading', { name: 'Saving', exact: true }).waitFor({ timeout: 30000 })
+    assert.equal(await page.locator('li.save-row').count(), 2)
+    await page.getByRole('button', { name: 'Stop', exact: true }).click()
+    await page.getByRole('heading', { name: 'Stopped', exact: true }).waitFor({ timeout: 10000 })
+  } finally {
+    await app.close()
+    await box.stop()
+  }
+})
+
+test('box wait: Save again stops on Choose recordings when a wanted recording is gone', async () => {
+  const shows = [
+    { title: 'Master Cook', items: [{ title: 'S1 E1 - Auditions', size: 8 * MB, duration: '0:58:12' }] },
+    { title: 'Jurassic Car Park', items: [{ title: 'Jurassic Car Park', size: 8 * MB, duration: '2:07:15' }] }
+  ]
+  const { box, app, page } = await loseBoxDuringSave({ name: 'gone', shows, select: async () => {} })
+  try {
+    const film = box.catalogue.showFolders.find(folder => folder.title === 'Jurassic Car Park')
+    film.items = []
+    await box.powerOn()
+    await page.getByRole('button', { name: 'Save again' }).click()
+    await page.getByRole('heading', { name: 'Choose recordings' }).waitFor({ timeout: 30000 })
+    await page.getByText('1 recording selected').waitFor()
+    assert.equal(await page.getByRole('heading', { name: 'Saving', exact: true }).count(), 0)
+  } finally {
+    await app.close()
+    await box.stop()
+  }
+})
+
 test('box wait: Stop while waiting for the box ends the save at once and keeps the partial files', async () => {
   const { box, app, page, saveFolder } = await startBoxWaitSave({ name: 'box-stop' })
   try {
