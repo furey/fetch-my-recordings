@@ -1,9 +1,11 @@
 import fs from 'node:fs/promises'
 import { saveRecordings } from 'fetchtv'
 
-export const startSave = ({ recordings, folder, forPlex, copyAgain = false, retryDelays, onProgress, onResult }) => {
+export const BOX_WAIT_MS = 10 * 60 * 1000
+
+export const startSave = ({ recordings, folder, forPlex, copyAgain = false, retryDelays, boxWaitMs = BOX_WAIT_MS, probeDelays, onProgress, onResult, onBoxState = () => {}, onRetry = () => {} }) => {
   const controller = new AbortController()
-  const done = runSave({ recordings, folder, forPlex, copyAgain, retryDelays, onProgress, onResult, signal: controller.signal })
+  const done = runSave({ recordings, folder, forPlex, copyAgain, retryDelays, boxWaitMs, probeDelays, onProgress, onResult, onBoxState, onRetry, signal: controller.signal })
   return { cancel: () => controller.abort(), done }
 }
 
@@ -37,6 +39,7 @@ export const plainReason = (result) => {
 }
 
 const failureReason = (text) => {
+  if (/box-unreachable/.test(text)) return 'The box did not answer for 10 minutes. Check whether it is in standby. If it is, turn it on with its remote. Also check that this computer is on the same network. Then save again.'
   if (/ENOSPC/.test(text)) return 'The folder ran out of space.'
   if (/EACCES|EPERM|EROFS/.test(text)) return 'Could not write to this folder. Choose another folder.'
   if (/ENAMETOOLONG/.test(text)) return 'The file name is too long for this folder. Choose a folder with a shorter path, such as one at the top of a drive.'
@@ -49,7 +52,7 @@ const failureReason = (text) => {
   return 'The copy did not finish. Save again to try once more.'
 }
 
-const runSave = async ({ recordings, folder, forPlex, copyAgain, retryDelays, onProgress, onResult, signal }) => {
+const runSave = async ({ recordings, folder, forPlex, copyAgain, retryDelays, boxWaitMs, probeDelays, onProgress, onResult, onBoxState, onRetry, signal }) => {
   await fs.mkdir(folder, { recursive: true })
   const described = []
   await saveRecordings({
@@ -58,7 +61,11 @@ const runSave = async ({ recordings, folder, forPlex, copyAgain, retryDelays, on
     forPlex,
     copyAgain,
     retryDelays,
+    boxWaitMs,
+    probeDelays,
     onProgress,
+    onBoxState,
+    onRetry: ({ id, attempt, of }) => onRetry({ id: String(id), attempt, of }),
     onResult: (result) => {
       const entry = describeResult(result)
       if (NOT_SAVED_STATUSES.includes(entry.status)) logNotSaved(result)

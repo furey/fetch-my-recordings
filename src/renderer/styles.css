@@ -1036,6 +1036,11 @@ body.is-hidden .progress.is-busy > span {
   color: var(--text-2);
 }
 
+.overall-text.is-box-state {
+  position: relative;
+  top: -1px;
+}
+
 .progress.is-overall {
   height: 6px;
   margin-bottom: 10px;
