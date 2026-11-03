@@ -83,6 +83,7 @@ const main = () => {
   repairInstallFolderAccess(previousStart)
   keepChromiumLog()
   applyGpuFallback()
+  if (isQuietWindow()) keepPaintingWhileInactive()
   app.enableSandbox()
   app.setAboutPanelOptions({
     applicationName: 'Fetch My Recordings',
@@ -114,11 +115,13 @@ const startSafely = () => {
 
 const start = () => {
   if (activeFault() === 'main-throw') throw new Error('Test fault: main-throw')
+  if (isQuietWindow() && process.platform === 'darwin') app.setActivationPolicy('accessory')
   nativeTheme.themeSource = 'dark'
-  const settings = createSettings(app.getPath('userData'))
+  const log = (message) => state.log.write(message)
+  const settings = createSettings(app.getPath('userData'), { log })
   blockRemoteRequests()
   Menu.setApplicationMenu(buildMenu())
-  registerIpc({ settings, history: createHistory(app.getPath('userData')) })
+  registerIpc({ settings, history: createHistory(app.getPath('userData'), { log }) })
   if (activeFault() === 'no-window') return state.log.write('Test fault: no-window.')
   state.window = createWindow()
 }
@@ -139,7 +142,8 @@ const createWindow = () => {
       nodeIntegration: false,
       sandbox: true,
       webSecurity: true,
-      spellcheck: false
+      spellcheck: false,
+      backgroundThrottling: !isQuietWindow()
     }
   })
   const fault = activeFault()
@@ -161,7 +165,7 @@ const loadRenderer = (window) => window.loadFile(rendererPage).catch(() => null)
 
 const showWhenReady = (window) => {
   if (window.isDestroyed()) return
-  window.show()
+  showWindow(window)
   const firstShow = !state.windowShown
   state.windowShown = true
   state.startSettled = true
@@ -182,8 +186,16 @@ const showIfStillHidden = (window) => {
 const revealWindow = (window) => {
   if (window.isDestroyed()) return
   if (window.isMinimized()) window.restore()
-  window.show()
+  showWindow(window)
   state.windowShown = true
+}
+
+const showWindow = (window) => (isQuietWindow() ? window.showInactive() : window.show())
+
+const keepPaintingWhileInactive = () => {
+  app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
+  app.commandLine.appendSwitch('disable-renderer-backgrounding')
+  app.commandLine.appendSwitch('disable-background-timer-throttling')
 }
 
 const startWatchdog = () => {
@@ -425,6 +437,8 @@ const quitNow = () => {
 
 const isTestRun = () => process.env.FMR_TEST === '1' && (!app.isPackaged || Boolean(process.env.CI))
 
+const isQuietWindow = () => isTestRun() || (process.env.FMR_QUIET_WINDOW === '1' && (!app.isPackaged || Boolean(process.env.CI)))
+
 const activeFault = () => isTestRun() ? process.env.FMR_FAULT ?? '' : ''
 
 const injectFault = ({ window, fault }) => {
@@ -502,17 +516,18 @@ const registerIpc = ({ settings, history }) => {
     return { folder: filePaths[0] }
   })
 
-  handle('folder:describe', async ({ folder, episodeIds }) => {
+  handle('folder:describe', async ({ folder, forPlex, copyAgain, episodeIds }) => {
     if (!isUsableFolder(folder)) return { error: 'invalid-folder' }
-    return describeFolder({ folder, items: selectedItems(episodeIds) })
+    const recordings = pickEpisodes({ shows: state.shows, episodeIds: toIdList(episodeIds) })
+    return describeFolder({ folder, recordings, forPlex: Boolean(forPlex), copyAgain: Boolean(copyAgain) })
   })
 
-  handle('save:start', async ({ folder, forPlex, episodeIds }) => {
+  handle('save:start', async ({ folder, forPlex, copyAgain, episodeIds }) => {
     if (state.activeSave) return { error: 'already-saving' }
     if (!isUsableFolder(folder)) return { error: 'invalid-folder' }
     const recordings = pickEpisodes({ shows: state.shows, episodeIds: toIdList(episodeIds) })
     await settings.update({ lastFolder: folder, forPlex: Boolean(forPlex) })
-    return runSave({ recordings, folder, forPlex: Boolean(forPlex), history })
+    return runSave({ recordings, folder, forPlex: Boolean(forPlex), copyAgain: Boolean(copyAgain), history })
   })
 
   handle('save:cancel', async () => {
@@ -549,14 +564,21 @@ const registerIpc = ({ settings, history }) => {
   })
 }
 
-const runSave = async ({ recordings, folder, forPlex, history }) => {
+const runSave = async ({ recordings, folder, forPlex, copyAgain, history }) => {
   const blockerId = powerSaveBlocker.start('prevent-app-suspension')
   const save = startSave({
     recordings,
     folder,
     forPlex,
+    copyAgain,
     retryDelays: retryDelaysFromEnv(),
+    ...boxWaitFromEnv(),
     onProgress: ({ id, bytes, total }) => send('save:progress', { id: String(id), bytes, total }),
+    onBoxState: ({ state: boxState }) => {
+      state.log.write(`Box during the save: ${boxState}`)
+      send('save:box', { state: boxState })
+    },
+    onRetry: (retry) => send('save:retry', retry),
     onResult: (result) => send('save:result', result)
   })
   state.activeSave = save
@@ -615,11 +637,6 @@ const rememberBox = (location) => {
   return describeBox(location)
 }
 
-const selectedItems = (episodeIds) => {
-  const wanted = new Set(toIdList(episodeIds))
-  return state.summaries.flatMap(show => show.episodes).filter(episode => wanted.has(episode.id))
-}
-
 const toIdList = (ids) => (Array.isArray(ids) ? ids : []).map(String)
 
 const isUsableFolder = (folder) => typeof folder === 'string' && path.isAbsolute(folder)
@@ -637,8 +654,18 @@ const safePath = (name) => {
   }
 }
 
-const retryDelaysFromEnv = () => {
-  const text = process.env.FETCHTV_RETRY_DELAYS_MS
+const retryDelaysFromEnv = () => millisecondListFromEnv('FETCHTV_RETRY_DELAYS_MS')
+
+const boxWaitFromEnv = () => {
+  const boxWaitMs = Number(process.env.FETCHTV_BOX_WAIT_MS)
+  return {
+    boxWaitMs: boxWaitMs > 0 ? boxWaitMs : undefined,
+    probeDelays: millisecondListFromEnv('FETCHTV_BOX_PROBE_DELAYS_MS')
+  }
+}
+
+const millisecondListFromEnv = (name) => {
+  const text = process.env[name]
   if (!text) return undefined
   return text.split(',').map(Number).filter(Number.isFinite)
 }
@@ -651,7 +678,7 @@ const focusWindow = () => {
     return
   }
   revealWindow(state.window)
-  state.window.focus()
+  if (!isQuietWindow()) state.window.focus()
 }
 
 const lockDownContents = (contents) => {

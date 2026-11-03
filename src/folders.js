@@ -1,17 +1,16 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { loadSavedFiles } from 'fetchtv'
+import { planSaves } from 'fetchtv'
 
-export const describeFolder = async ({ folder, items }) => {
+export const describeFolder = async ({ folder, recordings, forPlex = false, copyAgain = false }) => {
   const existing = await nearestExistingFolder(folder)
-  const [freeBytes, canWrite, savedFiles] = await Promise.all([
+  const [freeBytes, canWrite, plans] = await Promise.all([
     freeSpaceAt(existing),
     isWritable(existing),
-    loadSavedFiles(folder)
+    planSaves({ recordings, savePath: folder, forPlex, copyAgain })
   ])
-  const alreadySaved = items.filter(item => isSavedWithSize(savedFiles[item.id]))
-  const alreadySavedIds = new Set(alreadySaved.map(item => String(item.id)))
-  const toSave = items.filter(item => !alreadySavedIds.has(String(item.id)))
+  const alreadySaved = plans.filter(plan => plan.alreadySaved)
+  const toSave = plans.filter(plan => !plan.alreadySaved).map(plan => plan.item)
   return {
     folder,
     exists: existing === path.resolve(folder),
@@ -40,7 +39,5 @@ const freeSpaceAt = async (folder) => {
 }
 
 const isWritable = (folder) => fs.access(folder, fs.constants.W_OK).then(() => true, () => false)
-
-const isSavedWithSize = (entry) => typeof entry === 'object' && entry !== null && entry.size > 0
 
 const sumSizes = (items) => items.reduce((total, item) => total + (item.size > 0 ? item.size : 0), 0)

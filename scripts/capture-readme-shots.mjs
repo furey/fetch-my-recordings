@@ -63,7 +63,7 @@ const main = async () => {
 }
 
 const withApp = async ({ userData, realAddress }, run) => {
-  const env = { ...process.env, FETCHTV_USER_DATA: userData, FETCHTV_DISCOVERY: 'off' }
+  const env = { ...process.env, FETCHTV_USER_DATA: userData, FETCHTV_DISCOVERY: 'off', FMR_QUIET_WINDOW: '1' }
   const app = values.executable
     ? await electron.launch({ executablePath: values.executable, env })
     : await electron.launch({ args: [appRoot], cwd: appRoot, env })

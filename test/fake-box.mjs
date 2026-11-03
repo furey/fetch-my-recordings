@@ -5,7 +5,9 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import NodeSsdp from 'node-ssdp'
 
-const mediaServerFixture = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'media-server.xml')
+const fixturesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures')
+const mediaServerFixture = path.join(fixturesDir, 'media-server.xml')
+const REAL_BOX_SERVER = 'Linux/4.1.20-1.9, UPnP/1.0, DLNADOC/1.50'
 
 export const FETCH_BOX_OVERSTATEMENT = 84
 export const MB = 1024 * 1024
@@ -91,17 +93,27 @@ export const startFakeBox = async ({
   quirks = {},
   bytesPerSecond = 0,
   rootFolders = ['Recordings', 'Live TV'],
-  failingBrowses = []
+  failingBrowses = [],
+  cancelled = false
 } = {}) => {
-  const catalogue = buildCatalogue(shows)
+  const catalogue = buildCatalogue(cancelled ? [] : shows)
   const requests = []
   const attempts = new Map()
-  const mediaServerXml = (await fs.readFile(mediaServerFixture, 'utf8')).replace('Fetch TV Test Box', escapeXml(name))
+  const forgotten = new Set()
+  const mediaServerXml = cancelled
+    ? (await fs.readFile(path.join(fixturesDir, 'cancelled-media-server.xml'), 'utf8')).replace(/<friendlyName>[^<]*<\/friendlyName>/, `<friendlyName>STB ${escapeXml(host)}</friendlyName>`)
+    : (await fs.readFile(mediaServerFixture, 'utf8')).replace('Fetch TV Test Box', escapeXml(name))
+  const cancelledBrowse = cancelled ? await readCancelledBrowse() : null
 
   const server = createServer((req, res) => {
     requests.push({ method: req.method, url: req.url, range: req.headers.range ?? null })
+    if (cancelled) {
+      res.setHeader('SERVER', REAL_BOX_SERVER)
+      res.setHeader('CONNECTION', 'close')
+    }
     if (req.method === 'GET' && req.url === '/MediaServer.xml') return sendXml(res, mediaServerXml)
-    if (req.method === 'POST' && req.url === '/upnp/control/ContentDirectory') return answerBrowse({ req, res, catalogue, baseUrl: baseUrlOf(), rootFolders, failingBrowses })
+    if (req.method === 'POST' && req.url === '/web/cds_control' && cancelled) return answerCancelledBrowse({ req, res, cancelledBrowse })
+    if (req.method === 'POST' && req.url === '/upnp/control/ContentDirectory') return answerBrowse({ req, res, catalogue, baseUrl: baseUrlOf(), rootFolders, failingBrowses, forgotten })
     const itemMatch = req.url.match(/^\/item\/(\d+)$/)
     if (itemMatch && (req.method === 'GET' || req.method === 'HEAD')) {
       const item = catalogue.items.get(itemMatch[1])
@@ -125,10 +137,16 @@ export const startFakeBox = async ({
     port: actualPort,
     requests,
     catalogue,
+    forgetShow: (title) => forgotten.add(catalogue.showFolders.find(show => show.title === title).id),
+    powerOff: () => {
+      server.closeAllConnections()
+      server.close()
+    },
+    powerOn: () => new Promise(resolve => server.listen(actualPort, host, resolve)),
     stop: async () => {
       ssdpServer?.stop()
       server.closeAllConnections()
-      await new Promise(resolve => server.close(resolve))
+      if (server.listening) await new Promise(resolve => server.close(resolve))
     }
   }
 }
@@ -165,15 +183,35 @@ const buildCatalogue = (shows) => {
   return { showFolders, items }
 }
 
-const answerBrowse = async ({ req, res, catalogue, baseUrl, rootFolders, failingBrowses }) => {
-  const body = await readBody(req)
-  const objectId = body.match(/<ObjectID>([^<]*)<\/ObjectID>/)?.[1] ?? '0'
+const answerBrowse = async ({ req, res, catalogue, baseUrl, rootFolders, failingBrowses, forgotten }) => {
+  const objectId = objectIdOf(await readBody(req))
   if (failingBrowses.includes(objectId)) {
     res.writeHead(500)
     return res.end()
   }
-  const didl = didlFor({ objectId, catalogue, baseUrl, rootFolders })
+  const didl = forgotten.has(objectId) ? null : didlFor({ objectId, catalogue, baseUrl, rootFolders })
+  if (!didl) return sendNoSuchObject(res)
   sendXml(res, browseEnvelope(didl.xml, didl.count))
+}
+
+const readCancelledBrowse = async () => {
+  const [root, empty, noSuchObject] = await Promise.all(['cancelled-browse-root.xml', 'cancelled-browse-empty.xml', 'upnp-error-501.xml']
+    .map(name => fs.readFile(path.join(fixturesDir, name), 'utf8')))
+  return { root, empty, noSuchObject }
+}
+
+const answerCancelledBrowse = async ({ req, res, cancelledBrowse }) => {
+  const objectId = objectIdOf(await readBody(req))
+  if (objectId === '0') return sendXml(res, cancelledBrowse.root)
+  if (objectId === '1' || objectId === '2') return sendXml(res, cancelledBrowse.empty)
+  sendNoSuchObject(res)
+}
+
+const objectIdOf = (body) => body.match(/<ObjectID>([^<]*)<\/ObjectID>/)?.[1] ?? '0'
+
+const sendNoSuchObject = async (res) => {
+  res.writeHead(500, { 'Content-Type': 'text/xml; charset="utf-8"' })
+  res.end(await fs.readFile(path.join(fixturesDir, 'upnp-error-501.xml'), 'utf8'))
 }
 
 const ROOT_FOLDER_IDS = { Recordings: '1', 'Live TV': '2' }
@@ -185,8 +223,9 @@ const didlFor = ({ objectId, catalogue, baseUrl, rootFolders }) => {
   if (objectId === '1') {
     return { count: catalogue.showFolders.length, xml: catalogue.showFolders.map(show => container({ id: show.id, parentId: '1', title: show.title })).join('') }
   }
+  if (rootFolders.some(title => (ROOT_FOLDER_IDS[title] ?? title) === objectId)) return { count: 0, xml: '' }
   const show = catalogue.showFolders.find(folder => folder.id === objectId)
-  if (!show) return { count: 0, xml: '' }
+  if (!show) return null
   return { count: show.items.length, xml: show.items.map(item => itemXml({ item, baseUrl })).join('') }
 }
 
@@ -236,6 +275,7 @@ const sendRecording = ({ req, res, item, quirks, attempt, bytesPerSecond }) => {
   res.writeHead(start === null ? 200 : 206, headers)
   if (req.method === 'HEAD') return res.end()
   const dropAt = quirks.alwaysDropAt || (attempt === 1 ? quirks.dropFirstAttemptAt : 0)
+  if (quirks.goSilentAt) return streamBytes({ res, item, from, end: Math.max(from, quirks.goSilentAt), bytesPerSecond, finish: () => {} })
   const end = dropAt > from ? Math.min(dropAt, item.actualSize) : item.actualSize
   streamBytes({ res, item, from, end, bytesPerSecond, finish: () => (end < item.actualSize || quirks.resetAtEnd ? resetConnection(res) : res.end()) })
 }

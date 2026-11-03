@@ -93,7 +93,7 @@ const openSession = async ({ bytesPerSecond = 0 }) => {
   const userData = path.join(work, 'user-data')
   await fs.mkdir(userData, { recursive: true })
   await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify({ lastAddress: box.address, lastFolder: path.join(work, 'Movies', 'Fetch recordings') }))
-  const app = await electron.launch({ args: [appRoot], cwd: appRoot, env: { ...process.env, FETCHTV_USER_DATA: userData, FETCHTV_DISCOVERY: 'off', FETCHTV_RETRY_DELAYS_MS: '20,20' } })
+  const app = await electron.launch({ args: [appRoot], cwd: appRoot, env: { ...process.env, FETCHTV_USER_DATA: userData, FETCHTV_DISCOVERY: 'off', FETCHTV_RETRY_DELAYS_MS: '20,20', FMR_QUIET_WINDOW: '1' } })
   const page = await app.firstWindow()
   return {
     app,

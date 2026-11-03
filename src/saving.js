@@ -1,9 +1,11 @@
 import fs from 'node:fs/promises'
 import { saveRecordings } from 'fetchtv'
 
-export const startSave = ({ recordings, folder, forPlex, retryDelays, onProgress, onResult }) => {
+export const BOX_WAIT_MS = 10 * 60 * 1000
+
+export const startSave = ({ recordings, folder, forPlex, copyAgain = false, retryDelays, boxWaitMs = BOX_WAIT_MS, probeDelays, onProgress, onResult, onBoxState = () => {}, onRetry = () => {} }) => {
   const controller = new AbortController()
-  const done = runSave({ recordings, folder, forPlex, retryDelays, onProgress, onResult, signal: controller.signal })
+  const done = runSave({ recordings, folder, forPlex, copyAgain, retryDelays, boxWaitMs, probeDelays, onProgress, onResult, onBoxState, onRetry, signal: controller.signal })
   return { cancel: () => controller.abort(), done }
 }
 
@@ -37,26 +39,33 @@ export const plainReason = (result) => {
 }
 
 const failureReason = (text) => {
+  if (/box-unreachable/.test(text)) return 'The box did not answer for 10 minutes. Check whether it is in standby. If it is, turn it on with its remote. Also check that this computer is on the same network. Then save again.'
   if (/ENOSPC/.test(text)) return 'The folder ran out of space.'
   if (/EACCES|EPERM|EROFS/.test(text)) return 'Could not write to this folder. Choose another folder.'
   if (/ENAMETOOLONG/.test(text)) return 'The file name is too long for this folder. Choose a folder with a shorter path, such as one at the top of a drive.'
   if (/EINVAL: [^,]*, (open|mkdir|rename|copyfile|unlink|stat|lstat|scandir|utime|chmod)\b|ENOTDIR|EISDIR/.test(text)) return 'This folder does not accept the file name. Choose another folder.'
   if (/rejected the resume/.test(text)) return 'The box would not carry on from where the copy stopped. Save again to start this recording again.'
+  if (/connect ETIMEDOUT|connect EHOSTDOWN|Download initiation failed: timeout of \d+ms exceeded|The box sent no data/.test(text)) return 'The box stopped answering. Check whether it is in standby. If it is, turn it on with its remote, then save again.'
   if (/ECONNREFUSED|EHOSTUNREACH|ENETUNREACH|ENOTFOUND/.test(text)) return 'The box stopped answering. Check that it is turned on and connected, then save again.'
   if (/status code 4\d\d|status code 5\d\d/.test(text)) return 'The box would not send this recording.'
   if (/interrupted|mismatch|incomplete|Timeout|timeout|reset|Premature|empty file/.test(text)) return 'The copy stopped part way, even after trying again. Save again to carry on from where it stopped.'
   return 'The copy did not finish. Save again to try once more.'
 }
 
-const runSave = async ({ recordings, folder, forPlex, retryDelays, onProgress, onResult, signal }) => {
+const runSave = async ({ recordings, folder, forPlex, copyAgain, retryDelays, boxWaitMs, probeDelays, onProgress, onResult, onBoxState, onRetry, signal }) => {
   await fs.mkdir(folder, { recursive: true })
   const described = []
   await saveRecordings({
     recordings,
     savePath: folder,
     forPlex,
+    copyAgain,
     retryDelays,
+    boxWaitMs,
+    probeDelays,
     onProgress,
+    onBoxState,
+    onRetry: ({ id, attempt, of }) => onRetry({ id: String(id), attempt, of }),
     onResult: (result) => {
       const entry = describeResult(result)
       if (NOT_SAVED_STATUSES.includes(entry.status)) logNotSaved(result)

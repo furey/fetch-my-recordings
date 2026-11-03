@@ -20,6 +20,8 @@ contextBridge.exposeInMainWorld('fetchtv', {
   cancelSave: invoke('save:cancel'),
   onSaveProgress: subscribe('save:progress'),
   onSaveResult: subscribe('save:result'),
+  onSaveBoxState: subscribe('save:box'),
+  onSaveRetry: subscribe('save:retry'),
   openSavedFolder: invoke('folder:open'),
   openProjectPage: invoke('link:project'),
   openFetchtvPage: invoke('link:fetchtv'),
