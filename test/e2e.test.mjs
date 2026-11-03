@@ -1029,6 +1029,7 @@ const launchApp = async ({ userData, discovery = false, env: extraEnv = {} }) =>
     FETCHTV_USER_DATA: userData,
     FETCHTV_DISCOVERY: discovery ? 'on' : 'off',
     FETCHTV_RETRY_DELAYS_MS: '50,50',
+    FMR_QUIET_WINDOW: '1',
     ...extraEnv
   }
   const app = packagedExecutable

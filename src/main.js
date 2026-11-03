@@ -83,6 +83,7 @@ const main = () => {
   repairInstallFolderAccess(previousStart)
   keepChromiumLog()
   applyGpuFallback()
+  if (isQuietWindow()) keepPaintingWhileInactive()
   app.enableSandbox()
   app.setAboutPanelOptions({
     applicationName: 'Fetch My Recordings',
@@ -114,6 +115,7 @@ const startSafely = () => {
 
 const start = () => {
   if (activeFault() === 'main-throw') throw new Error('Test fault: main-throw')
+  if (isQuietWindow() && process.platform === 'darwin') app.setActivationPolicy('accessory')
   nativeTheme.themeSource = 'dark'
   const log = (message) => state.log.write(message)
   const settings = createSettings(app.getPath('userData'), { log })
@@ -140,7 +142,8 @@ const createWindow = () => {
       nodeIntegration: false,
       sandbox: true,
       webSecurity: true,
-      spellcheck: false
+      spellcheck: false,
+      backgroundThrottling: !isQuietWindow()
     }
   })
   const fault = activeFault()
@@ -162,7 +165,7 @@ const loadRenderer = (window) => window.loadFile(rendererPage).catch(() => null)
 
 const showWhenReady = (window) => {
   if (window.isDestroyed()) return
-  window.show()
+  showWindow(window)
   const firstShow = !state.windowShown
   state.windowShown = true
   state.startSettled = true
@@ -183,8 +186,16 @@ const showIfStillHidden = (window) => {
 const revealWindow = (window) => {
   if (window.isDestroyed()) return
   if (window.isMinimized()) window.restore()
-  window.show()
+  showWindow(window)
   state.windowShown = true
+}
+
+const showWindow = (window) => (isQuietWindow() ? window.showInactive() : window.show())
+
+const keepPaintingWhileInactive = () => {
+  app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
+  app.commandLine.appendSwitch('disable-renderer-backgrounding')
+  app.commandLine.appendSwitch('disable-background-timer-throttling')
 }
 
 const startWatchdog = () => {
@@ -426,6 +437,8 @@ const quitNow = () => {
 
 const isTestRun = () => process.env.FMR_TEST === '1' && (!app.isPackaged || Boolean(process.env.CI))
 
+const isQuietWindow = () => isTestRun() || (process.env.FMR_QUIET_WINDOW === '1' && (!app.isPackaged || Boolean(process.env.CI)))
+
 const activeFault = () => isTestRun() ? process.env.FMR_FAULT ?? '' : ''
 
 const injectFault = ({ window, fault }) => {
@@ -665,7 +678,7 @@ const focusWindow = () => {
     return
   }
   revealWindow(state.window)
-  state.window.focus()
+  if (!isQuietWindow()) state.window.focus()
 }
 
 const lockDownContents = (contents) => {
