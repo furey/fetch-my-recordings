@@ -1069,7 +1069,7 @@ const saveAgainFromDialog = () => {
 const saveAgain = () => (state.save?.boxGaveUp ? saveAgainAfterLostBox() : beginSave())
 
 const saveAgainAfterLostBox = async () => {
-  const wanted = recordingKeys(state.selected)
+  const wanted = { counts: recordingKeys(state.selected), ids: new Set(state.selected) }
   const visit = showScreen(1, searchingScreen())
   const boxes = await withMinimumDuration(findBoxesWithRetry({ wholeNetwork: false }))
   if (!isCurrentVisit(visit)) return
@@ -1080,12 +1080,15 @@ const saveAgainAfterLostBox = async () => {
   useBox(sameBox, { thenSave: wanted })
 }
 
-const saveSameRecordings = (wanted) => {
-  const left = new Map(wanted)
-  const matched = state.shows.flatMap(show => show.episodes
+const saveSameRecordings = ({ counts, ids }) => {
+  const left = new Map(counts)
+  const candidates = state.shows.flatMap(show => show.episodes
     .filter(episode => !episode.stillRecording)
-    .filter(episode => takeOne({ left, key: recordingKey({ show, episode }) })))
-  state.selected = new Set(matched.map(episode => episode.id))
+    .map(episode => ({ episode, key: recordingKey({ show, episode }) })))
+  const sameIds = candidates.filter(({ episode, key }) => ids.has(episode.id) && takeOne({ left, key }))
+  const sameIdSet = new Set(sameIds.map(({ episode }) => episode.id))
+  const sameKeys = candidates.filter(({ episode, key }) => !sameIdSet.has(episode.id) && takeOne({ left, key }))
+  state.selected = new Set([...sameIds, ...sameKeys].map(({ episode }) => episode.id))
   const isEveryRecordingFound = [...left.values()].every(count => count === 0)
   if (!isEveryRecordingFound || state.selected.size === 0) return showScreen(2, recordingsScreen())
   beginSave()

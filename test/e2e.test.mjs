@@ -355,29 +355,43 @@ const loseBoxDuringSave = async ({ name, shows, select }) => {
   return { box, app, page }
 }
 
-const tickOnly = async ({ page, show, count }) => {
+const tickOnly = async ({ page, show, indexes }) => {
   await page.getByRole('button', { name: 'Select none' }).click()
   const row = page.locator(`li.show-row[data-show="${show}"]`)
   await row.locator('.row-main').first().click()
-  const boxes = row.locator('li.episode-row input[type="checkbox"]')
-  for (let index = 0; index < count; index++) await boxes.nth(index).check()
+  const episodes = row.locator('li.episode-row')
+  const ids = []
+  for (const index of indexes) {
+    await episodes.nth(index).locator('input[type="checkbox"]').check()
+    ids.push(await episodes.nth(index).getAttribute('data-episode'))
+  }
+  return ids
 }
 
-test('box wait: Save again picks the same number of same-title recordings as before', async () => {
-  const shows = [{ title: 'Seven News', items: Array.from({ length: 10 }, () => ({ title: 'Seven News', size: 6 * MB, duration: '0:30:00' })) }]
-  const { box, app, page } = await loseBoxDuringSave({ name: 'same-title', shows, select: (page) => tickOnly({ page, show: 'Seven News', count: 2 }) })
+const sameTitleShows = (sizeOf) => [{ title: 'Seven News', items: Array.from({ length: 10 }, (_, index) => ({ title: 'Seven News', size: sizeOf(index), duration: '0:30:00' })) }]
+
+const saveAgainKeepsTicked = async ({ name, shows }) => {
+  let ticked = []
+  const { box, app, page } = await loseBoxDuringSave({ name, shows, select: async (page) => { ticked = await tickOnly({ page, show: 'Seven News', indexes: [3, 7] }) } })
   try {
     await box.powerOn()
     await page.getByRole('button', { name: 'Save again' }).click()
     await page.getByRole('heading', { name: 'Saving', exact: true }).waitFor({ timeout: 30000 })
-    assert.equal(await page.locator('li.save-row').count(), 2)
+    const saving = await page.locator('li.save-row').evaluateAll(rows => rows.map(row => row.dataset.episode))
+    assert.deepEqual(saving.sort(), ticked.sort())
     await page.getByRole('button', { name: 'Stop', exact: true }).click()
     await page.getByRole('heading', { name: 'Stopped', exact: true }).waitFor({ timeout: 10000 })
   } finally {
     await app.close()
     await box.stop()
   }
-})
+}
+
+test('box wait: Save again picks the same same-title recordings by size', () =>
+  saveAgainKeepsTicked({ name: 'same-title-sizes', shows: sameTitleShows(index => 6 * MB + index * 4096) }))
+
+test('box wait: Save again keeps the ticked same-title recordings when their sizes are equal', () =>
+  saveAgainKeepsTicked({ name: 'same-title-equal', shows: sameTitleShows(() => 6 * MB) }))
 
 test('box wait: Save again stops on Choose recordings when a wanted recording is gone', async () => {
   const shows = [
