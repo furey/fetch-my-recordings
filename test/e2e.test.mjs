@@ -393,15 +393,14 @@ test('box wait: Save again picks the same same-title recordings by size', () =>
 test('box wait: Save again keeps the ticked same-title recordings when their sizes are equal', () =>
   saveAgainKeepsTicked({ name: 'same-title-equal', shows: sameTitleShows(() => 6 * MB) }))
 
-test('box wait: Save again stops on Choose recordings when a wanted recording is gone', async () => {
+const saveAgainAfterLosing = async ({ name, lose }) => {
   const shows = [
     { title: 'Master Cook', items: [{ title: 'S1 E1 - Auditions', size: 8 * MB, duration: '0:58:12' }] },
     { title: 'Jurassic Car Park', items: [{ title: 'Jurassic Car Park', size: 8 * MB, duration: '2:07:15' }] }
   ]
-  const { box, app, page } = await loseBoxDuringSave({ name: 'gone', shows, select: async () => {} })
+  const { box, app, page } = await loseBoxDuringSave({ name, shows, select: async () => {} })
   try {
-    const film = box.catalogue.showFolders.find(folder => folder.title === 'Jurassic Car Park')
-    film.items = []
+    lose(box)
     await box.powerOn()
     await page.getByRole('button', { name: 'Save again' }).click()
     await page.getByRole('heading', { name: 'Choose recordings' }).waitFor({ timeout: 30000 })
@@ -411,7 +410,13 @@ test('box wait: Save again stops on Choose recordings when a wanted recording is
     await app.close()
     await box.stop()
   }
-})
+}
+
+test('box wait: Save again stops on Choose recordings when a wanted recording is gone', () =>
+  saveAgainAfterLosing({ name: 'gone', lose: (box) => { box.catalogue.showFolders.find(folder => folder.title === 'Jurassic Car Park').items = [] } }))
+
+test('box wait: Save again stops on Choose recordings when the box answers error 501 for a wanted show', () =>
+  saveAgainAfterLosing({ name: 'gone-501', lose: (box) => box.forgetShow('Jurassic Car Park') }))
 
 test('box wait: Stop while waiting for the box ends the save at once and keeps the partial files', async () => {
   const { box, app, page, saveFolder } = await startBoxWaitSave({ name: 'box-stop' })
@@ -425,6 +430,41 @@ test('box wait: Stop while waiting for the box ends the save at once and keeps t
     const files = await listFiles(saveFolder)
     assert.ok(files.some(file => file.endsWith('.ts.part')), `no partial file in ${files.join(', ')}`)
     assert.equal(files.some(file => file.endsWith('.lock')), false)
+  } finally {
+    await app.close()
+    await box.stop()
+  }
+})
+
+test('a cancelled box, modelled on the real captures, says it has no recordings', async () => {
+  const box = await startFakeBox({ cancelled: true })
+  const userData = await freshDir('user-data-cancelled')
+  await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify({ lastAddress: box.address }))
+  const app = await launchApp({ userData })
+  try {
+    const page = await openApp(app)
+    await page.getByRole('heading', { name: 'No recordings on this box' }).waitFor()
+    assert.match(await readMainLog(userData), /Listed recordings from box 127\.0\.0\.1: empty\./)
+  } finally {
+    await app.close()
+    await box.stop()
+  }
+})
+
+test('a show the box answers error 501 for is left out of the list, quickly', async () => {
+  const box = await startFakeBox({ shows: demoShows({ size: MB }) })
+  box.forgetShow('Jurassic Car Park')
+  const userData = await freshDir('user-data-forgotten')
+  await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify({ lastAddress: box.address }))
+  const app = await launchApp({ userData })
+  try {
+    const page = await openApp(app)
+    const startedAt = Date.now()
+    await page.getByRole('heading', { name: 'Choose recordings' }).waitFor()
+    assert.ok(Date.now() - startedAt < 5000, 'the list took longer than 5 s')
+    await page.locator('li.show-row[data-show="Master Cook"]').waitFor()
+    assert.equal(await page.locator('li.show-row[data-show="Jurassic Car Park"]').count(), 0)
+    assert.equal(box.requests.filter(request => request.method === 'POST').length, 2 + box.catalogue.showFolders.length, 'a show browse was retried')
   } finally {
     await app.close()
     await box.stop()
