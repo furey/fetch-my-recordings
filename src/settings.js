@@ -1,13 +1,14 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { readJsonFile } from './json-file.js'
 
-export const createSettings = (folder) => {
+export const createSettings = (folder, { log } = {}) => {
   const filePath = path.join(folder, 'settings.json')
   let cache = null
 
   const read = async () => {
     if (cache) return cache
-    cache = await fs.readFile(filePath, 'utf8').then(JSON.parse, () => ({}))
+    cache = await readJsonFile({ filePath, fallback: () => ({}), log })
     return cache
   }
 
