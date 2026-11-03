@@ -1,16 +1,17 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { loadSavedFiles } from 'fetchtv'
+import { readJsonFile } from './json-file.js'
 
 const SIZE_TOLERANCE = 1024
 
-export const createHistory = (folder) => {
+export const createHistory = (folder, { log } = {}) => {
   const filePath = path.join(folder, 'history.json')
   let cache = null
 
   const read = async () => {
     if (cache) return cache
-    cache = await fs.readFile(filePath, 'utf8').then(JSON.parse, () => ({ entries: {} }))
+    cache = await readJsonFile({ filePath, fallback: () => ({ entries: {} }), log })
     cache.entries = cache.entries ?? {}
     return cache
   }

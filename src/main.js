@@ -115,10 +115,11 @@ const startSafely = () => {
 const start = () => {
   if (activeFault() === 'main-throw') throw new Error('Test fault: main-throw')
   nativeTheme.themeSource = 'dark'
-  const settings = createSettings(app.getPath('userData'))
+  const log = (message) => state.log.write(message)
+  const settings = createSettings(app.getPath('userData'), { log })
   blockRemoteRequests()
   Menu.setApplicationMenu(buildMenu())
-  registerIpc({ settings, history: createHistory(app.getPath('userData')) })
+  registerIpc({ settings, history: createHistory(app.getPath('userData'), { log }) })
   if (activeFault() === 'no-window') return state.log.write('Test fault: no-window.')
   state.window = createWindow()
 }

@@ -7,6 +7,8 @@ import { describeFolder } from '../src/folders.js'
 import { describeListing, listingProblemFor } from '../src/recordings.js'
 import { createInstallAccessRecord, previousStartFailedAccessCheck } from '../src/install-access.js'
 import { createLaunchGuard } from '../src/launch-guard.js'
+import { createSettings } from '../src/settings.js'
+import { createHistory } from '../src/history.js'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -201,3 +203,38 @@ test('folder: counts as already saved only what the save will skip', async () =>
     fs.rmSync(folder, { recursive: true, force: true })
   }
 })
+
+const BAD_JSON_FILES = {
+  'a byte order mark': '\uFEFF{"lastFolder":"/x"}',
+  'a truncated file': '{"lastFolder":"/x", "sou',
+  'an empty file': ''
+}
+
+for (const [name, text] of Object.entries(BAD_JSON_FILES)) {
+  test(`settings and history: ${name} reads without failing`, async () => {
+    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'fmr-json-'))
+    const lines = []
+    const log = (line) => lines.push(line)
+    fs.writeFileSync(path.join(folder, 'settings.json'), text)
+    fs.writeFileSync(path.join(folder, 'history.json'), text.replace('lastFolder', 'entries'))
+    try {
+      const settings = await createSettings(folder, { log }).read()
+      const history = await createHistory(folder, { log }).read()
+      if (name === 'a byte order mark') {
+        assert.deepEqual(settings, { lastFolder: '/x' })
+        assert.deepEqual(lines, [])
+        return
+      }
+      assert.deepEqual(settings, {})
+      assert.deepEqual(history, { entries: {} })
+      assert.equal(lines.length, 2)
+      assert.equal(fs.readFileSync(path.join(folder, 'settings.bad.json'), 'utf8'), text)
+      assert.ok(fs.existsSync(path.join(folder, 'history.bad.json')))
+      await createSettings(folder, { log }).update({ sound: false })
+      assert.deepEqual(JSON.parse(fs.readFileSync(path.join(folder, 'settings.json'), 'utf8')), { sound: false })
+      assert.equal(fs.readFileSync(path.join(folder, 'settings.bad.json'), 'utf8'), text)
+    } finally {
+      fs.rmSync(folder, { recursive: true, force: true })
+    }
+  })
+}
