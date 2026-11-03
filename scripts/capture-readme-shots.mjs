@@ -81,9 +81,14 @@ const withApp = async ({ userData, realAddress }, run) => {
     }
     await run({ page, shot })
   } finally {
+    await stopSaveOnClose(app)
     await app.close()
   }
 }
+
+const stopSaveOnClose = (app) => app.evaluate(({ dialog }) => {
+  dialog.showMessageBox = async (...args) => ({ response: args.at(-1).buttons.indexOf('Stop and close') })
+}).catch(() => null)
 
 const showAddressAs = ({ page, real, shown }) => page.evaluate(({ real, shown }) => {
   const rewrite = (root) => {

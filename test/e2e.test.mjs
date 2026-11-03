@@ -436,6 +436,172 @@ test('box wait: Stop while waiting for the box ends the save at once and keeps t
   }
 })
 
+const QUIT_EXIT_MS = 3000
+const quitShows = () => [{
+  title: 'Master Cook',
+  items: [
+    { title: 'S1 E1 - Auditions', size: 24 * MB, duration: '0:58:12' },
+    { title: 'S1 E2 - Mystery Box', size: 24 * MB, duration: '0:57:40' },
+    { title: 'S1 E3 - Team Challenge', size: 24 * MB, duration: '0:59:03' }
+  ]
+}]
+
+const quitApp = ({ app }) => { setTimeout(() => app.quit(), 0) }
+const closeWindow = ({ BrowserWindow }) => { setTimeout(() => BrowserWindow.getAllWindows()[0].close(), 0) }
+
+const startQuitSave = async ({ name, shows = quitShows(), quirks = {}, env = {} }) => {
+  const box = await startFakeBox({ shows, quirks: { rangeNotSatisfiable: false, ...quirks }, bytesPerSecond: 2 * MB })
+  const userData = await freshDir(`user-data-${name}`)
+  const saveFolder = await freshDir(name)
+  await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify({ lastAddress: box.address, lastFolder: saveFolder }))
+  const app = await launchApp({ userData, env })
+  const page = await openApp(app)
+  await page.getByRole('heading', { name: 'Choose recordings' }).waitFor()
+  await page.getByRole('button', { name: 'Next' }).click()
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+  await page.locator('.status', { hasText: / MB of / }).first().waitFor()
+  return { box, app, child: app.process(), page, userData, saveFolder }
+}
+
+const answerCloseQuestion = ({ app, button }) => app.evaluate(({ dialog }, label) => {
+  globalThis.closeQuestions = 0
+  dialog.showMessageBox = async (...args) => {
+    globalThis.closeQuestions += 1
+    return label ? { response: args.at(-1).buttons.indexOf(label) } : new Promise(() => {})
+  }
+}, button)
+
+const closeQuestionCount = (app) => app.evaluate(() => globalThis.closeQuestions)
+
+const quitAndTime = async ({ app, child, quit }) => {
+  const exited = new Promise(resolve => child.once('exit', () => resolve('exited')))
+  const started = Date.now()
+  await app.evaluate(quit)
+  const outcome = await Promise.race([exited, new Promise(resolve => setTimeout(() => resolve('running'), QUIT_EXIT_MS))])
+  return { outcome, ms: Date.now() - started }
+}
+
+const stopIfRunning = async (child) => {
+  if (child.exitCode !== null || child.signalCode !== null) return
+  const exited = new Promise(resolve => child.once('exit', resolve))
+  process.kill(child.pid, 'SIGKILL')
+  await exited
+}
+
+const assertResumableParts = async ({ box, saveFolder }) => {
+  const files = await listFiles(saveFolder)
+  const parts = files.filter(file => file.endsWith('.ts.part'))
+  assert.ok(parts.length > 0, `no partial file in ${files.join(', ')}`)
+  assert.equal(files.some(file => file.endsWith('.lock')), false, `a lock file is left in ${files.join(', ')}`)
+  for (const part of parts) {
+    const title = path.basename(part, '.ts.part')
+    const item = [...box.catalogue.items.values()].find(entry => entry.title === title)
+    const saved = await fs.readFile(path.join(saveFolder, part))
+    assert.ok(saved.length < item.actualSize, `${part} is not partial`)
+    assert.ok(saved.equals(recordingBytes(item).subarray(0, saved.length)), `${part} does not match the start of the recording`)
+  }
+}
+
+const assertQuitEndsSave = async ({ name, quit, quirks, env, during = async () => {} }) => {
+  const { box, app, child, page, saveFolder } = await startQuitSave({ name, quirks, env })
+  try {
+    await during({ box, page })
+    await answerCloseQuestion({ app, button: 'Stop and close' })
+    const { outcome, ms } = await quitAndTime({ app, child, quit })
+    assert.equal(outcome, 'exited', `the app was still running ${ms} ms after the quit`)
+    await assertResumableParts({ box, saveFolder })
+  } finally {
+    await stopIfRunning(child)
+    await box.stop()
+  }
+}
+
+test('quit during save: app.quit asks first, then ends the save at once, and a later save carries on from the partial files', async () => {
+  const { box, app, child, userData, saveFolder } = await startQuitSave({ name: 'quit-app' })
+  try {
+    await answerCloseQuestion({ app, button: 'Stop and close' })
+    const { outcome, ms } = await quitAndTime({ app, child, quit: quitApp })
+    assert.equal(outcome, 'exited', `the app was still running ${ms} ms after app.quit()`)
+    await assertResumableParts({ box, saveFolder })
+  } catch (error) {
+    await stopIfRunning(child)
+    await box.stop()
+    throw error
+  }
+  const again = await launchApp({ userData })
+  try {
+    const page = await openApp(again)
+    await page.getByRole('heading', { name: 'Choose recordings' }).waitFor()
+    await page.getByRole('button', { name: 'Next' }).click()
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await waitForFinish({ page, heading: 'All done', timeout: 60000 })
+    for (const { title } of quitShows()[0].items) await assertSameBytes({ box, folder: saveFolder, file: `Master Cook/${title}.ts`, title })
+    assert.ok(box.requests.some(request => request.range && !/^bytes=0-/.test(request.range)), 'no recording resumed with a Range request')
+  } finally {
+    await again.close()
+    await box.stop()
+  }
+})
+
+test('quit during save: closing the window asks first, then ends the save at once', () =>
+  assertQuitEndsSave({ name: 'quit-window', quit: closeWindow }))
+
+test('quit during save: quitting while the box is silent mid-stream ends the save at once', () =>
+  assertQuitEndsSave({
+    name: 'quit-silent',
+    quit: quitApp,
+    quirks: { goSilentAt: 4 * MB },
+    during: ({ page }) => page.waitForTimeout(3000)
+  }))
+
+test('quit during save: quitting while waiting for the box ends the save at once', () =>
+  assertQuitEndsSave({
+    name: 'quit-box-wait',
+    quit: quitApp,
+    env: BOX_WAIT_ENV,
+    during: async ({ box, page }) => {
+      box.powerOff()
+      await page.locator('#overall-line', { hasText: 'Waiting for the Fetch box to answer…' }).waitFor({ timeout: 15000 })
+    }
+  }))
+
+test('quit during save: Stop and close still closes when the save ends while the question is open', async () => {
+  const shows = [{ title: 'Master Cook', items: [{ title: 'S1 E1 - Auditions', size: 4 * MB, duration: '0:58:12' }] }]
+  const { box, app, child, page } = await startQuitSave({ name: 'quit-late-answer', shows })
+  try {
+    await app.evaluate(({ dialog }) => {
+      dialog.showMessageBox = async (...args) => new Promise(resolve => {
+        globalThis.sendCloseAnswer = () => resolve({ response: args.at(-1).buttons.indexOf('Stop and close') })
+      })
+    })
+    await app.evaluate(quitApp)
+    await waitForFinish({ page, heading: 'All done', timeout: 30000 })
+    const { outcome, ms } = await quitAndTime({ app, child, quit: () => { setTimeout(() => globalThis.sendCloseAnswer(), 0) } })
+    assert.equal(outcome, 'exited', `the app was still running ${ms} ms after Stop and close`)
+  } finally {
+    await stopIfRunning(child)
+    await box.stop()
+  }
+})
+
+test('quit during save: Keep saving cancels the quit, and an unanswered question keeps the app open', async () => {
+  const { box, app, child, page } = await startQuitSave({ name: 'quit-keep' })
+  try {
+    await answerCloseQuestion({ app, button: 'Keep saving' })
+    const kept = await quitAndTime({ app, child, quit: quitApp })
+    assert.equal(kept.outcome, 'running')
+    assert.equal(await closeQuestionCount(app), 1)
+    await page.getByRole('heading', { name: 'Saving', exact: true }).waitFor()
+    await answerCloseQuestion({ app, button: null })
+    const waiting = await quitAndTime({ app, child, quit: closeWindow })
+    assert.equal(waiting.outcome, 'running')
+    assert.equal(await closeQuestionCount(app), 1)
+  } finally {
+    await stopIfRunning(child)
+    await box.stop()
+  }
+})
+
 test('a cancelled box, modelled on the real captures, says it has no recordings', async () => {
   const box = await startFakeBox({ cancelled: true })
   const userData = await freshDir('user-data-cancelled')
