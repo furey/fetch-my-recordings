@@ -606,12 +606,17 @@ const confirmCloseDuringSave = async ({ event, window }) => {
     message: 'Recordings are still saving.',
     detail: 'If you stop now, a recording that is part way keeps what it has. Save the same recordings to the same folder next time to carry on from there.'
   })
-  if (response !== 1 || !state.activeSave) return
+  if (response !== 1) return
+  await stopActiveSave()
+  state.closingAfterStop = true
+  if (!window.isDestroyed()) window.close()
+}
+
+const stopActiveSave = async () => {
   const save = state.activeSave
+  if (!save) return
   save.cancel()
   await save.done.catch(() => null)
-  state.closingAfterStop = true
-  window.close()
 }
 
 const handle = (channel, handler) => {
