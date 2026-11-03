@@ -949,7 +949,7 @@ const whatNowBody = (id) => {
     return [
       h('p', {}, 'Open them in VLC, a free video player that plays them all. QuickTime Player on a recent Mac plays many of them too.'),
       h('p', {}, linkButton({ label: 'Download VLC', name: 'vlc' })),
-      h('p', {}, 'Need an MP4 instead? The Freetvarr guide shows how to convert them.'),
+      h('p', {}, 'Need an MP4 instead? This guide shows how to convert them.'),
       h('p', {}, linkButton({ label: 'Convert to MP4', name: 'mp4' }))
     ]
   }
@@ -963,7 +963,7 @@ const whatNowBody = (id) => {
       state.forPlex ? null : h('p', { className: 'option-action' }, h('button', { type: 'button', className: 'btn', id: 'save-with-plex-names', onclick: saveAgainWithPlexNames }, 'Save again with Plex names'))))]
   }
   return [
-    h('p', {}, 'If you have, or are happy to buy, a TV tuner for your aerial (such as an HDHomeRun) and a computer or NAS that stays on, Freetvarr records free-to-air TV into the same kind of library. It’s free, from the same author.'),
+    h('p', {}, 'If you have, or are happy to buy, a TV tuner for your aerial (such as an HDHomeRun) and a computer or NAS that stays on, ', h('strong', {}, 'Freetvarr'), ' records free-to-air TV into the same kind of library. It’s free, from the same author.'),
     h('p', {}, linkButton({ label: 'Learn about Freetvarr', name: 'freetvarr' }))
   ]
 }
