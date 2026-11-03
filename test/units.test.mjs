@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { parseBoxAddress, describeBox, findBoxes } from '../src/boxes.js'
 import { FETCH_MANUFACTURER_URL, MEDIA_SERVER_TARGET, parseSearchResponse, searchForFetchBoxes } from '../src/discovery.js'
 import { plainReason, summariseResults } from '../src/saving.js'
+import { describeFolder } from '../src/folders.js'
 import { describeListing, listingProblemFor } from '../src/recordings.js'
 import { createInstallAccessRecord, previousStartFailedAccessCheck } from '../src/install-access.js'
 import { createLaunchGuard } from '../src/launch-guard.js'
@@ -41,6 +42,12 @@ test('reasons: each result gets a plain reason with no error codes', () => {
   assert.match(reason('failed', { warning: 'The Fetch box rejected the resume of X at 1 MB of 2 MB.' }), /would not carry on/)
   assert.match(reason('failed', { error: 'Download initiation failed: connect ECONNREFUSED 1.2.3.4:49152' }), /stopped answering/)
   assert.match(reason('failed', { warning: 'Download interrupted for X at 50.0%. (Connection reset) Partial file kept for resume.' }), /stopped part way/)
+  const asleep = 'The box stopped answering. Check whether it is in standby. If it is, turn it on with its remote, then save again.'
+  assert.equal(reason('failed', { warning: 'Download interrupted for X at 40.0%. (The box sent no data for 60 s) Partial file kept for resume.' }), asleep)
+  assert.equal(reason('failed', { error: 'Download initiation failed: timeout of 30000ms exceeded' }), asleep)
+  assert.equal(reason('failed', { error: 'Download initiation failed: connect ETIMEDOUT 192.168.1.50:49152' }), asleep)
+  assert.equal(reason('failed', { error: 'Download initiation failed: connect EHOSTDOWN 192.168.1.50:49152' }), asleep)
+  assert.notEqual(reason('failed', { error: 'Write error: ETIMEDOUT: connection timed out, write' }), asleep)
   assert.match(reason('failed', { error: "Directory creation failed: ENAMETOOLONG: name too long, mkdir 'C:\\Users\\x\\Reset Timeout'" }), /^The file name is too long for this folder\. Choose a folder with a shorter path/)
   assert.match(reason('failed', { error: "Write error: EINVAL: invalid argument, open 'D:\\Fetch\\CON\\x.ts.part'" }), /^This folder does not accept the file name\. Choose another folder\.$/)
   assert.match(reason('failed', { error: "Directory creation failed: ENOTDIR: not a directory, mkdir '/x/y'" }), /does not accept the file name/)
@@ -168,4 +175,28 @@ test('listing: the log line names the box IP, the outcome, and any error or fold
     'Listed recordings from box 192.168.1.50: browse-failed. Error: Request failed with status code 500.')
   assert.equal(describeListing({ address: '192.168.1.50', outcome: 'no-recordings-folder', folders: [] }),
     'Listed recordings from box 192.168.1.50: no-recordings-folder. The box listed these folders: none.')
+})
+
+test('folder: counts as already saved only what the save will skip', async () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'fmr-folder-'))
+  const item = (id, title) => ({ id, title, size: 2048, ext: 'ts', season_number: '1', season_number_padded: '01', episode_number: id, episode_number_padded: id.padStart(2, '0') })
+  const recordings = [{ title: 'Bluey', items: [item('1', 'S1 E1 - Saved'), item('2', 'S1 E2 - Missing'), item('3', 'S1 E3 - New')] }]
+  fs.mkdirSync(path.join(folder, 'Bluey'))
+  fs.writeFileSync(path.join(folder, 'Bluey', 'S1 E1 - Saved.ts'), Buffer.alloc(2048))
+  fs.writeFileSync(path.join(folder, 'fetchtv.json'), JSON.stringify({
+    1: { title: 'S1 E1 - Saved', size: 2048, path: 'Bluey/S1 E1 - Saved.ts' },
+    2: { title: 'S1 E2 - Missing', size: 2048, path: 'Bluey/S1 E2 - Missing.ts' }
+  }))
+  try {
+    const plain = await describeFolder({ folder, recordings })
+    assert.equal(plain.alreadySavedCount, 1)
+    assert.equal(plain.toSaveCount, 2)
+    assert.equal(plain.neededBytes, 4096)
+    assert.equal((await describeFolder({ folder, recordings, forPlex: true })).alreadySavedCount, 1)
+    const again = await describeFolder({ folder, recordings, forPlex: true, copyAgain: true })
+    assert.equal(again.alreadySavedCount, 0)
+    assert.equal(again.toSaveCount, 3)
+  } finally {
+    fs.rmSync(folder, { recursive: true, force: true })
+  }
 })

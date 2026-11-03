@@ -236,6 +236,7 @@ const sendRecording = ({ req, res, item, quirks, attempt, bytesPerSecond }) => {
   res.writeHead(start === null ? 200 : 206, headers)
   if (req.method === 'HEAD') return res.end()
   const dropAt = quirks.alwaysDropAt || (attempt === 1 ? quirks.dropFirstAttemptAt : 0)
+  if (quirks.goSilentAt) return streamBytes({ res, item, from, end: Math.max(from, quirks.goSilentAt), bytesPerSecond, finish: () => {} })
   const end = dropAt > from ? Math.min(dropAt, item.actualSize) : item.actualSize
   streamBytes({ res, item, from, end, bytesPerSecond, finish: () => (end < item.actualSize || quirks.resetAtEnd ? resetConnection(res) : res.end()) })
 }
