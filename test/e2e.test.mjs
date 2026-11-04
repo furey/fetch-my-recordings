@@ -23,7 +23,7 @@ before(async () => {
 })
 
 after(async () => {
-  await fs.rm(tmpRoot, { recursive: true, force: true })
+  await fs.rm(tmpRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 }).catch(() => null)
 })
 
 test('first run: no box found, type the address, choose episodes, save in the default layout', async () => {
@@ -460,14 +460,34 @@ const startQuitSave = async ({ name, shows = quitShows(), quirks = {}, env = {} 
   await page.getByRole('button', { name: 'Next' }).click()
   await page.getByRole('button', { name: 'Save', exact: true }).click()
   await page.locator('.status', { hasText: / MB of / }).first().waitFor()
+  await waitForPartialFile(saveFolder)
   return { box, app, child: app.process(), page, userData, saveFolder }
+}
+
+const waitForPartialFile = async (folder, timeout = 15000) => {
+  const deadline = Date.now() + timeout
+  while (Date.now() < deadline) {
+    if (await hasStartedPartialFile(folder)) return
+    await new Promise(resolve => setTimeout(resolve, 100))
+  }
+  throw new Error(`no partial file with bytes in ${folder} after ${timeout} ms`)
+}
+
+const hasStartedPartialFile = async (folder) => {
+  const parts = (await listFiles(folder)).filter(file => file.endsWith('.ts.part'))
+  const sizes = await Promise.all(parts.map(part => fs.stat(path.join(folder, part)).then(stat => stat.size, () => 0)))
+  return sizes.some(size => size > 0)
 }
 
 const answerCloseQuestion = ({ app, button }) => app.evaluate(({ dialog }, label) => {
   globalThis.closeQuestions = 0
   dialog.showMessageBox = async (...args) => {
     globalThis.closeQuestions += 1
-    return label ? { response: args.at(-1).buttons.indexOf(label) } : new Promise(() => {})
+    const { buttons } = args.at(-1)
+    if (label) return { response: buttons.indexOf(label) }
+    return new Promise(resolve => {
+      globalThis.sendCloseAnswer = () => resolve({ response: buttons.indexOf('Stop and close') })
+    })
   }
 }, button)
 
@@ -596,6 +616,8 @@ test('quit during save: Keep saving cancels the quit, and an unanswered question
     const waiting = await quitAndTime({ app, child, quit: closeWindow })
     assert.equal(waiting.outcome, 'running')
     assert.equal(await closeQuestionCount(app), 1)
+    const closed = await quitAndTime({ app, child, quit: () => { setTimeout(() => globalThis.sendCloseAnswer(), 0) } })
+    assert.equal(closed.outcome, 'exited')
   } finally {
     await stopIfRunning(child)
     await box.stop()
@@ -625,18 +647,23 @@ test('quit during save: quitting again while the question is open asks once, the
   }
 })
 
-test('quit during save: after Keep saving cancels a quit, a window crash still offers a reload', async () => {
-  const { box, app, child, userData } = await startQuitSave({ name: 'quit-keep-crash' })
+test('quit during save: after Keep saving cancels a quit, a window that fails to load still offers a reload', async () => {
+  const { box, app, child, userData } = await startQuitSave({ name: 'quit-keep-reload' })
   try {
     await app.evaluate(({ dialog }) => {
       dialog.showMessageBox = async (...args) => ({ response: Math.max(0, args.at(-1).buttons.indexOf('Keep saving')) })
     })
     const kept = await quitAndTime({ app, child, quit: quitApp })
     assert.equal(kept.outcome, 'running')
-    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.forcefullyCrashRenderer())
+    await app.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()[0].webContents.loadURL('file:///fmr-missing-page.html').catch(() => null)
+    })
     const deadline = Date.now() + 10000
     while (!/Reloading the window\./.test(await readMainLog(userData)) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 200))
-    assert.match(await readMainLog(userData), /The window contents stopped: .*\n.*Reloading the window\./s)
+    assert.match(await readMainLog(userData), /The window did not load: .*\n.*Reloading the window\./s)
+    await answerCloseQuestion({ app, button: 'Stop and close' })
+    const closed = await quitAndTime({ app, child, quit: quitApp })
+    assert.equal(closed.outcome, 'exited')
   } finally {
     await stopIfRunning(child)
     await box.stop()

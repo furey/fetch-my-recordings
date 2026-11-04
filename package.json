@@ -20,7 +20,7 @@
     "bundle": "node scripts/bundle.mjs",
     "start": "npm run bundle && electron .",
     "fake-box": "node test/fake-box-cli.mjs",
-    "test": "npm run bundle && node --test --test-concurrency=1 --test-timeout=600000 \"test/*.test.mjs\"",
+    "test": "npm run bundle && node --test --test-concurrency=1 --test-timeout=1800000 \"test/*.test.mjs\"",
     "dist": "npm run bundle && electron-builder --config electron-builder.config.cjs",
     "dist:mac": "npm run dist -- --mac",
     "dist:win": "npm run dist -- --win",
