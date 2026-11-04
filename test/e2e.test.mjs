@@ -602,6 +602,47 @@ test('quit during save: Keep saving cancels the quit, and an unanswered question
   }
 })
 
+test('quit during save: quitting again while the question is open asks once, then Stop and close quits', async () => {
+  const { box, app, child } = await startQuitSave({ name: 'quit-twice' })
+  try {
+    await app.evaluate(({ dialog }) => {
+      globalThis.closeQuestions = 0
+      dialog.showMessageBox = async (...args) => new Promise(resolve => {
+        globalThis.closeQuestions += 1
+        globalThis.sendCloseAnswer = () => resolve({ response: args.at(-1).buttons.indexOf('Stop and close') })
+      })
+    })
+    await app.evaluate(quitApp)
+    await app.evaluate(quitApp)
+    await app.evaluate(closeWindow)
+    await new Promise(resolve => setTimeout(resolve, 500))
+    assert.equal(await closeQuestionCount(app), 1)
+    const { outcome, ms } = await quitAndTime({ app, child, quit: () => { setTimeout(() => globalThis.sendCloseAnswer(), 0) } })
+    assert.equal(outcome, 'exited', `the app was still running ${ms} ms after Stop and close`)
+  } finally {
+    await stopIfRunning(child)
+    await box.stop()
+  }
+})
+
+test('quit during save: after Keep saving cancels a quit, a window crash still offers a reload', async () => {
+  const { box, app, child, userData } = await startQuitSave({ name: 'quit-keep-crash' })
+  try {
+    await app.evaluate(({ dialog }) => {
+      dialog.showMessageBox = async (...args) => ({ response: Math.max(0, args.at(-1).buttons.indexOf('Keep saving')) })
+    })
+    const kept = await quitAndTime({ app, child, quit: quitApp })
+    assert.equal(kept.outcome, 'running')
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.forcefullyCrashRenderer())
+    const deadline = Date.now() + 10000
+    while (!/Reloading the window\./.test(await readMainLog(userData)) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 200))
+    assert.match(await readMainLog(userData), /The window contents stopped: .*\n.*Reloading the window\./s)
+  } finally {
+    await stopIfRunning(child)
+    await box.stop()
+  }
+})
+
 test('a cancelled box, modelled on the real captures, says it has no recordings', async () => {
   const box = await startFakeBox({ cancelled: true })
   const userData = await freshDir('user-data-cancelled')
