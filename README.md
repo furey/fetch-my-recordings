@@ -27,7 +27,7 @@ Prefer a terminal, a NAS, or Docker? See [Related projects](#related-projects).
 <https://github.com/user-attachments/assets/9ecbf007-1c77-4009-842c-13fce198e09b>
 
 > [!NOTE]<br>
-> Fetch's [Gen 3 Extended Service Levy](https://news.fetchtv.com.au/extended-service-levy-1) applies to Mini Gen 3 and Mighty Gen 3 owners from `1 November 2026`. Copy your recordings while the box still lists them: a box whose Fetch account is cancelled lists no recordings. To record free-to-air TV without Fetch, see [Freetvarr](https://github.com/furey/freetvarr).
+> Fetch's [Gen 3 Extended Service Levy](https://main.fetchtv.com.au/gen-3-extended-service-levy) asks Mini Gen 3 and Mighty Gen 3 owners to opt in by `30 November 2026`; Fetch suspends boxes from `1 December 2026` if they do not. Copy your recordings while the box still lists them: a box whose Fetch account is cancelled lists no recordings. To record free-to-air TV without Fetch, see [Freetvarr](https://github.com/furey/freetvarr).
 
 ## Contents
 
