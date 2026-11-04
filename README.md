@@ -290,6 +290,8 @@ On Windows, the installer gives the app's sandboxed processes read access to its
 
 Third-party security software, such as Malwarebytes, can stop the app before its window shows. The app is not signed, so this software does not know it. If the app closes with no window, add the install folder to the allow list of your security software (in Malwarebytes, the **Allow List**), then open the app again. The install folder is `%LOCALAPPDATA%\Programs\fetch-my-recordings`.
 
+An old graphics driver can also stop the window from opening. Install the latest driver from the maker of your graphics card (for example NVIDIA, AMD, or Intel), restart the computer, then open the app again.
+
 If the window does not open on two starts in a row, the next start shows a message with the log folder. [Start a thread in Discussions](https://github.com/furey/fetch-my-recordings/discussions) and attach the files `main.log` and `chromium.log` (Windows only) from the log folder:
 
 | Computer | Log folder                                               |
