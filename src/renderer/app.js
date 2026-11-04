@@ -486,7 +486,7 @@ const savedSummaryLine = () => {
 }
 
 const showRow = (show) => {
-  const savable = show.episodes.filter(episode => !episode.stillRecording)
+  const savable = show.episodes.filter(isSavable)
   const checkbox = h('input', { type: 'checkbox', disabled: savable.length === 0, 'aria-label': show.title })
   const row = { onChange: () => {} }
   const episodeRows = show.episodes.map(episode => episodeRow({ episode, onChange: () => row.onChange() }))
@@ -528,13 +528,13 @@ const showRow = (show) => {
 }
 
 const episodeRow = ({ episode, onChange }) => {
-  const checkbox = h('input', { type: 'checkbox', disabled: episode.stillRecording, 'aria-label': episode.title })
+  const checkbox = h('input', { type: 'checkbox', disabled: !isSavable(episode), 'aria-label': episode.title })
   checkbox.addEventListener('change', () => {
     checkbox.checked ? state.selected.add(episode.id) : state.selected.delete(episode.id)
     onChange()
   })
   const savedState = savedStateOf(episode)
-  const main = h('div', { className: `row-main${episode.stillRecording ? '' : ' is-clickable'}`, 'data-saved': savedState },
+  const main = h('div', { className: `row-main${isSavable(episode) ? ' is-clickable' : ''}`, 'data-saved': savedState },
     h('label', { className: 'check', onclick: (event) => event.stopPropagation() }, checkbox),
     h('span', { className: 'row-text' },
       h('span', { className: 'row-title' }, episode.title),
@@ -547,10 +547,14 @@ const episodeRow = ({ episode, onChange }) => {
   }
 }
 
-const episodeDetail = (episode) => (episode.stillRecording ? 'Still recording' : formatDuration(episode.duration))
+const episodeDetail = (episode) => {
+  if (episode.stillRecording) return 'Still recording'
+  if (episode.unavailable) return 'Box would not send it'
+  return formatDuration(episode.duration)
+}
 
 const episodeSide = ({ episode, savedState }) => {
-  if (episode.stillRecording) return h('span', { className: 'row-side' })
+  if (!isSavable(episode)) return h('span', { className: 'row-side' })
   if (savedState === 'saved') return h('span', { className: 'row-side is-saved' }, 'Saved')
   if (savedState === 'missing') {
     return h('span', { className: 'row-side' }, h('button', {
@@ -607,7 +611,7 @@ const refreshSelectionSummary = ({ summary, next, allButton, noneButton }) => {
 const selectAll = () => savableEpisodes(state.shows).forEach(episode => state.selected.add(episode.id))
 
 const showDetail = (show) => {
-  const savable = show.episodes.filter(episode => !episode.stillRecording)
+  const savable = show.episodes.filter(isSavable)
   const saved = savable.filter(episode => savedStateOf(episode) === 'saved').length
   if (savable.length > 0 && saved === savable.length) return 'All saved'
   return `${plural(show.episodes.length, 'recording')} · ${formatBytes(sumSizes(show.episodes))}`
@@ -1084,7 +1088,7 @@ const saveAgainAfterLostBox = async () => {
 const saveSameRecordings = ({ counts, ids }) => {
   const left = new Map(counts)
   const candidates = state.shows.flatMap(show => show.episodes
-    .filter(episode => !episode.stillRecording)
+    .filter(isSavable)
     .map(episode => ({ episode, key: recordingKey({ show, episode }) })))
   const sameIds = candidates.filter(({ episode, key }) => ids.has(episode.id) && takeOne({ left, key }))
   const sameIdSet = new Set(sameIds.map(({ episode }) => episode.id))
@@ -1319,7 +1323,9 @@ const pauseWhenHidden = () => {
 
 const markElement = ({ large = false } = {}) => h('img', { className: `mark${large ? ' is-large' : ''}`, src: 'mark.svg', alt: '', width: large ? 104 : 36, height: large ? 104 : 36 })
 
-const savableEpisodes = (shows) => shows.flatMap(show => show.episodes).filter(episode => !episode.stillRecording)
+const savableEpisodes = (shows) => shows.flatMap(show => show.episodes).filter(isSavable)
+
+const isSavable = (episode) => !episode.stillRecording && !episode.unavailable
 
 const sumSizes = (episodes) => episodes.reduce((total, episode) => total + (episode.size || 0), 0)
 

@@ -42,5 +42,6 @@ const summariseEpisode = async (item) => ({
   title: item.title,
   size: Number.isFinite(item.size) && item.size > 0 ? item.size : 0,
   duration: item.duration || 0,
-  stillRecording: await isCurrentlyRecording(item)
+  stillRecording: await isCurrentlyRecording(item),
+  unavailable: item.unavailable === true
 })

@@ -117,7 +117,7 @@ export const startFakeBox = async ({
     const itemMatch = req.url.match(/^\/item\/(\d+)$/)
     if (itemMatch && (req.method === 'GET' || req.method === 'HEAD')) {
       const item = catalogue.items.get(itemMatch[1])
-      if (!item) return notFound(res)
+      if (!item || item.missing) return notFound(res)
       const attempt = (attempts.get(item.id) ?? 0) + 1
       attempts.set(item.id, attempt)
       return sendRecording({ req, res, item, quirks: { ...DEFAULT_QUIRKS, ...quirks, ...item.quirks }, attempt, bytesPerSecond })
@@ -167,7 +167,7 @@ const buildCatalogue = (shows) => {
     const showId = String(100 + showIndex)
     const showItems = show.items.map((item, itemIndex) => {
       const id = String(1000 + showIndex * 100 + itemIndex)
-      const recordingInProgress = item.stillRecording || item.size <= 0
+      const recordingInProgress = item.stillRecording || item.missing || item.size <= 0
       const entry = {
         ...item,
         id,
@@ -233,7 +233,7 @@ const container = ({ id, parentId, title }) =>
   `<container id="${id}" parentID="${parentId}" restricted="1"><dc:title>${escapeXml(title)}</dc:title><upnp:class>object.container</upnp:class></container>`
 
 const itemXml = ({ item, baseUrl }) => {
-  const listedSize = item.actualSize > 0 ? item.actualSize + (item.quirks.overstate ?? FETCH_BOX_OVERSTATEMENT) : -1
+  const listedSize = item.actualSize > 0 && !item.listedSizeUnknown ? item.actualSize + (item.quirks.overstate ?? FETCH_BOX_OVERSTATEMENT) : -1
   const taskName = item.parentTaskName ? ` parentTaskName="${escapeXml(item.parentTaskName)}"` : ''
   return `<item id="${item.id}" parentID="${item.parentId}" restricted="1"><dc:title>${escapeXml(item.title)}</dc:title>` +
     `<dc:description>${escapeXml(item.title)}</dc:description><upnp:class>object.item.videoItem</upnp:class>` +

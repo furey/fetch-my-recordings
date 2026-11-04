@@ -845,6 +845,58 @@ test('saved recordings: still there is unticked, moved or deleted is ticked with
   }
 })
 
+test('unknown sizes: a recording the box will not send cannot be ticked, and one with a steady length saves whole', async () => {
+  const shows = [{
+    title: 'Bigger Brother',
+    items: [
+      { title: 'S2 E4 - House Meeting', size: 3 * MB, duration: '0:29:10' },
+      { title: 'S2 E5 - Day Forty', size: 3 * MB + 1024, duration: '0:28:45', listedSizeUnknown: true },
+      { title: 'S2 E6 - Eviction Night', size: -1, duration: '0:00:00', stillRecording: true },
+      { title: 'S2 E7 - The Return', size: -1, duration: '0:30:00', missing: true }
+    ]
+  }]
+  const box = await startFakeBox({ shows })
+  const userData = await freshDir('user-data-unknown-size')
+  const saveFolder = await freshDir('unknown-size')
+  await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify({ lastAddress: box.address, lastFolder: saveFolder }))
+  const app = await launchApp({ userData })
+  try {
+    const page = await openApp(app)
+    await page.getByRole('heading', { name: 'Choose recordings' }).waitFor({ timeout: 30000 })
+    await page.locator('#saved-summary', { hasText: '2 new' }).waitFor()
+    const show = page.locator('li.show-row[data-show="Bigger Brother"]')
+    await show.locator('.row-main').first().click()
+    const row = (title) => show.locator('.episode-row', { hasText: title })
+    await row('S2 E6').getByText('Still recording', { exact: true }).waitFor()
+    await row('S2 E7').getByText('Box would not send it', { exact: true }).waitFor()
+    assert.equal(await show.getByLabel('S2 E7 - The Return').isDisabled(), true)
+    assert.equal(await show.getByLabel('S2 E7 - The Return').isChecked(), false)
+    await row('S2 E7').locator('.row-main').click()
+    assert.equal(await show.getByLabel('S2 E7 - The Return').isChecked(), false)
+    assert.equal(await row('S2 E7').locator('.row-main').evaluate(element => element.classList.contains('is-clickable')), false)
+    assert.equal(await row('S2 E7').locator('.row-side').textContent(), '')
+    assert.equal(await show.getByLabel('S2 E5 - Day Forty').isChecked(), true)
+    assert.equal(await show.locator('.row-side-value').first().textContent(), '2 of 4')
+    await page.getByText('2 recordings selected').waitFor()
+    await page.getByRole('button', { name: 'Select none' }).click()
+    await page.getByRole('button', { name: 'Select all' }).click()
+    await page.getByText('2 recordings selected').waitFor()
+    assert.equal(await show.locator('.row-main input[type="checkbox"]').first().isChecked(), true)
+    await capture({ app, page, name: '2-recordings-unavailable' })
+
+    await page.getByRole('button', { name: 'Next' }).click()
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await waitForFinish({ page, heading: 'All done', timeout: 60000 })
+    assert.deepEqual(await totals(page), { 'Saved': '2', 'Already saved': '0', 'Not saved': '0' })
+    const files = await listFiles(saveFolder)
+    assert.equal(files.some(file => file.includes('The Return')), false)
+    await assertSameBytes({ box, folder: saveFolder, file: 'Bigger Brother/S2 E5 - Day Forty.ts', title: 'S2 E5 - Day Forty' })
+  } finally {
+    await app.close()
+    await box.stop()
+  }
+})
+
 test('saved recordings: a fetchtv.json in the folder marks files saved by the command-line tool', async () => {
   const box = await startFakeBox({ shows: [demoShows()[0]] })
   const userData = await freshDir('user-data-cli')
