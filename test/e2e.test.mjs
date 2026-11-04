@@ -23,7 +23,7 @@ before(async () => {
 })
 
 after(async () => {
-  await fs.rm(tmpRoot, { recursive: true, force: true })
+  await fs.rm(tmpRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 }).catch(() => null)
 })
 
 test('first run: no box found, type the address, choose episodes, save in the default layout', async () => {
@@ -483,7 +483,11 @@ const answerCloseQuestion = ({ app, button }) => app.evaluate(({ dialog }, label
   globalThis.closeQuestions = 0
   dialog.showMessageBox = async (...args) => {
     globalThis.closeQuestions += 1
-    return label ? { response: args.at(-1).buttons.indexOf(label) } : new Promise(() => {})
+    const { buttons } = args.at(-1)
+    if (label) return { response: buttons.indexOf(label) }
+    return new Promise(resolve => {
+      globalThis.sendCloseAnswer = () => resolve({ response: buttons.indexOf('Stop and close') })
+    })
   }
 }, button)
 
@@ -612,6 +616,8 @@ test('quit during save: Keep saving cancels the quit, and an unanswered question
     const waiting = await quitAndTime({ app, child, quit: closeWindow })
     assert.equal(waiting.outcome, 'running')
     assert.equal(await closeQuestionCount(app), 1)
+    const closed = await quitAndTime({ app, child, quit: () => { setTimeout(() => globalThis.sendCloseAnswer(), 0) } })
+    assert.equal(closed.outcome, 'exited')
   } finally {
     await stopIfRunning(child)
     await box.stop()
