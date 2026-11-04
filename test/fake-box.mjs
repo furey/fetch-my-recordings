@@ -233,13 +233,21 @@ const container = ({ id, parentId, title }) =>
   `<container id="${id}" parentID="${parentId}" restricted="1"><dc:title>${escapeXml(title)}</dc:title><upnp:class>object.container</upnp:class></container>`
 
 const itemXml = ({ item, baseUrl }) => {
-  const listedSize = item.actualSize > 0 && !item.listedSizeUnknown ? item.actualSize + (item.quirks.overstate ?? FETCH_BOX_OVERSTATEMENT) : -1
+  const listedSize = listedSizeOf(item)
   const taskName = item.parentTaskName ? ` parentTaskName="${escapeXml(item.parentTaskName)}"` : ''
   return `<item id="${item.id}" parentID="${item.parentId}" restricted="1"><dc:title>${escapeXml(item.title)}</dc:title>` +
     `<dc:description>${escapeXml(item.title)}</dc:description><upnp:class>object.item.videoItem</upnp:class>` +
     `<res protocolInfo="http-get:*:video/mpeg-tts:DLNA.ORG_PN=AVC_TS_HD_AC3;DLNA.ORG_OP=01" size="${listedSize}" duration="${item.duration ?? '0:30:00'}"${taskName}>` +
     `${baseUrl}/item/${item.id}</res></item>`
 }
+
+const listedSizeOf = (item) => {
+  if (item.listedAsRecording) return RECORDING_MARKER_SIZE
+  if (item.actualSize > 0 && !item.listedSizeUnknown) return item.actualSize + (item.quirks.overstate ?? FETCH_BOX_OVERSTATEMENT)
+  return -1
+}
+
+const RECORDING_MARKER_SIZE = 4398046510080
 
 const browseEnvelope = (didlXml, count) => `<?xml version="1.0" encoding="utf-8"?>
 <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
@@ -257,7 +265,7 @@ const sendRecording = ({ req, res, item, quirks, attempt, bytesPerSecond }) => {
   const statedSize = item.actualSize + (quirks.overstate ?? 0)
   const start = rangeStartOf(req.headers.range)
   if (item.actualSize <= 0) {
-    res.writeHead(200, { 'Content-Type': 'video/mpeg', 'Content-Length': '4398046510080' })
+    res.writeHead(200, { 'Content-Type': 'video/mpeg', 'Content-Length': String(RECORDING_MARKER_SIZE) })
     return res.end()
   }
   if (start !== null && quirks.rangeNotSatisfiable) {

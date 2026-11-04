@@ -60,7 +60,9 @@ test('first run: no box found, type the address, choose episodes, save in the de
     assert.equal(await masterCook.locator('.row-main input[type="checkbox"]').first().evaluate(input => input.indeterminate), true)
     const coastal = page.locator('li.show-row[data-show="Bigger Brother"]')
     await coastal.locator('.row-main').first().click()
-    assert.equal(await coastal.getByLabel('S2 E6 - Eviction Night').isDisabled(), true)
+    const eviction = coastal.locator('.episode-row', { hasText: 'S2 E6' })
+    assert.equal(await eviction.locator('input[type="checkbox"]').count(), 0)
+    assert.equal(await eviction.getAttribute('data-status'), 'size-unknown')
     await capture({ app, page, name: '2-recordings-episodes' })
     await page.getByText('9 recordings selected').waitFor()
 
@@ -845,15 +847,19 @@ test('saved recordings: still there is unticked, moved or deleted is ticked with
   }
 })
 
-test('unknown sizes: a recording the box will not send cannot be ticked, and one with a steady length saves whole', async () => {
+test('unknown sizes: recordings that cannot be saved show a status instead of a checkbox, and one with a steady length saves whole', async () => {
   const shows = [{
     title: 'Bigger Brother',
     items: [
       { title: 'S2 E4 - House Meeting', size: 3 * MB, duration: '0:29:10' },
       { title: 'S2 E5 - Day Forty', size: 3 * MB + 1024, duration: '0:28:45', listedSizeUnknown: true },
       { title: 'S2 E6 - Eviction Night', size: -1, duration: '0:00:00', stillRecording: true },
-      { title: 'S2 E7 - The Return', size: -1, duration: '0:30:00', missing: true }
+      { title: 'S2 E7 - The Return', size: -1, duration: '0:30:00', missing: true },
+      { title: 'S2 E8 - Live Finale', size: -1, duration: '0:00:00', stillRecording: true, listedAsRecording: true }
     ]
+  }, {
+    title: 'Late News',
+    items: [{ title: 'Late News', size: -1, duration: '0:00:00', stillRecording: true, listedAsRecording: true }]
   }]
   const box = await startFakeBox({ shows })
   const userData = await freshDir('user-data-unknown-size')
@@ -865,18 +871,25 @@ test('unknown sizes: a recording the box will not send cannot be ticked, and one
     await page.getByRole('heading', { name: 'Choose recordings' }).waitFor({ timeout: 30000 })
     await page.locator('#saved-summary', { hasText: '2 new' }).waitFor()
     const show = page.locator('li.show-row[data-show="Bigger Brother"]')
+    assert.equal(await show.locator('.row-detail').first().textContent(), '2 recordings · 6 MB · 3 cannot be saved now')
+    assert.equal(await show.locator('.row-side-value').first().textContent(), '2 of 2')
+    const lateNews = page.locator('li.show-row[data-show="Late News"]')
+    assert.equal(await lateNews.locator('.row-detail').first().textContent(), 'Still recording')
+    assert.equal(await lateNews.locator('.row-side-value').first().textContent(), '')
+    assert.equal(await lateNews.locator('.row-main').first().locator('input[type="checkbox"]').count(), 0)
     await show.locator('.row-main').first().click()
     const row = (title) => show.locator('.episode-row', { hasText: title })
-    await row('S2 E6').getByText('Still recording', { exact: true }).waitFor()
-    await row('S2 E7').getByText('Box would not send it', { exact: true }).waitFor()
-    assert.equal(await show.getByLabel('S2 E7 - The Return').isDisabled(), true)
-    assert.equal(await show.getByLabel('S2 E7 - The Return').isChecked(), false)
+    await row('S2 E6').getByText('May still be recording', { exact: true }).waitFor()
+    await row('S2 E7').getByText('File missing on the box', { exact: true }).waitFor()
+    await row('S2 E8').getByText('Still recording', { exact: true }).waitFor()
+    assert.deepEqual(await show.locator('.drawer .episode-row').evaluateAll(rows => rows.map(item => item.dataset.status ?? 'savable')), ['savable', 'savable', 'size-unknown', 'missing', 'recording'])
+    assert.equal(await row('S2 E7').locator('input[type="checkbox"]').count(), 0)
+    assert.equal(await row('S2 E7').getByRole('img').getAttribute('aria-label'), 'Cannot be saved')
+    assert.match(await row('S2 E7').locator('.row-main').getAttribute('title'), /its file could not be opened/)
     await row('S2 E7').locator('.row-main').click()
-    assert.equal(await show.getByLabel('S2 E7 - The Return').isChecked(), false)
     assert.equal(await row('S2 E7').locator('.row-main').evaluate(element => element.classList.contains('is-clickable')), false)
     assert.equal(await row('S2 E7').locator('.row-side').textContent(), '')
     assert.equal(await show.getByLabel('S2 E5 - Day Forty').isChecked(), true)
-    assert.equal(await show.locator('.row-side-value').first().textContent(), '2 of 4')
     await page.getByText('2 recordings selected').waitFor()
     await page.getByRole('button', { name: 'Select none' }).click()
     await page.getByRole('button', { name: 'Select all' }).click()
