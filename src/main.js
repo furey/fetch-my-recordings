@@ -40,6 +40,7 @@ const state = {
   activeSave: null,
   savedFolder: null,
   closingAfterStop: false,
+  closePending: false,
   log: null,
   launchGuard: null,
   gpuRung: 0,
@@ -598,20 +599,42 @@ const runSave = async ({ recordings, folder, forPlex, copyAgain, history }) => {
 const confirmCloseDuringSave = async ({ event, window }) => {
   if (!state.activeSave || state.closingAfterStop) return
   event.preventDefault()
-  const { response } = await dialog.showMessageBox(window, {
-    type: 'question',
-    buttons: ['Keep saving', 'Stop and close'],
-    defaultId: 0,
-    cancelId: 0,
-    message: 'Recordings are still saving.',
-    detail: 'If you stop now, a recording that is part way keeps what it has. Save the same recordings to the same folder next time to carry on from there.'
-  })
-  if (response !== 1 || !state.activeSave) return
+  if (state.closePending) return
+  const stopped = await askThenStopSave(window)
+  if (!stopped) return
+  state.closingAfterStop = true
+  if (!window.isDestroyed()) window.close()
+}
+
+const askThenStopSave = async (window) => {
+  state.closePending = true
+  try {
+    const { response } = await dialog.showMessageBox(window, {
+      type: 'question',
+      buttons: ['Keep saving', 'Stop and close'],
+      defaultId: 0,
+      cancelId: 0,
+      message: 'Recordings are still saving.',
+      detail: 'If you stop now, a recording that is part way keeps what it has. Save the same recordings to the same folder next time to carry on from there.'
+    })
+    if (response !== 1) return keepSaving()
+    await stopActiveSave()
+    return true
+  } finally {
+    state.closePending = false
+  }
+}
+
+const keepSaving = () => {
+  state.quitting = false
+  return false
+}
+
+const stopActiveSave = async () => {
   const save = state.activeSave
+  if (!save) return
   save.cancel()
   await save.done.catch(() => null)
-  state.closingAfterStop = true
-  window.close()
 }
 
 const handle = (channel, handler) => {
