@@ -1,9 +1,9 @@
 import { createServer } from 'node:http'
+import dgram from 'node:dgram'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import NodeSsdp from 'node-ssdp'
 
 const fixturesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures')
 const mediaServerFixture = path.join(fixturesDir, 'media-server.xml')
@@ -131,7 +131,7 @@ export const startFakeBox = async ({
   const actualPort = server.address().port
   const advertisedHost = host === '0.0.0.0' ? lanAddress() : host
   const baseUrlOf = () => `http://${advertisedHost}:${actualPort}`
-  const ssdpServer = ssdp ? await startSsdp({ location: `${baseUrlOf()}/MediaServer.xml` }) : null
+  const ssdpServer = ssdp ? await startSsdpOrClose({ server, location: `${baseUrlOf()}/MediaServer.xml` }) : null
 
   return {
     url: `${baseUrlOf()}/MediaServer.xml`,
@@ -353,16 +353,84 @@ const patternFor = ({ seed, length }) => {
   return buffer
 }
 
-const startSsdp = async ({ location }) => {
-  const server = new NodeSsdp.Server({ location, udn: 'uuid:fetchtv-fake-box', reuseAddr: true, ssdpTtl: 2 })
-  server.addUSN('upnp:rootdevice')
-  server.addUSN('urn:schemas-upnp-org:device:MediaServer:1')
-  await server.start()
-  return server
+const SSDP_ADDRESS = '239.255.255.250'
+const SSDP_PORT = 1900
+const SSDP_UDN = 'uuid:fetchtv-fake-box'
+const SSDP_TARGETS = ['upnp:rootdevice', 'urn:schemas-upnp-org:device:MediaServer:1']
+
+const startSsdpOrClose = async ({ server, location }) => {
+  try {
+    return await startSsdp({ location })
+  } catch (error) {
+    server.closeAllConnections()
+    server.close()
+    throw error
+  }
 }
 
-const lanAddress = () => Object.values(os.networkInterfaces()).flat()
-  .find(entry => entry && entry.family === 'IPv4' && !entry.internal)?.address ?? '127.0.0.1'
+const startSsdp = async ({ location }) => {
+  const socket = dgram.createSocket({ type: 'udp4', reuseAddr: true })
+  socket.on('message', (message, remote) => answerSearch({ socket, message, remote, location }))
+  await new Promise((resolve, reject) => {
+    socket.once('error', reject)
+    socket.bind(SSDP_PORT, () => {
+      socket.off('error', reject)
+      resolve()
+    })
+  })
+  socket.on('error', () => {})
+  socket.setMulticastTTL(2)
+  lanAddresses().forEach(address => joinSsdpGroup({ socket, address }))
+  return { stop: () => closeQuietly(socket) }
+}
+
+const answerSearch = ({ socket, message, remote, location }) => {
+  const target = searchTargetOf(String(message))
+  if (!target) return
+  const targets = target === 'ssdp:all' ? SSDP_TARGETS : SSDP_TARGETS.filter(known => known === target)
+  targets.forEach(matched => socket.send(searchReply({ location, target: matched }), remote.port, remote.address))
+}
+
+const searchTargetOf = (text) => {
+  const [requestLine, ...headerLines] = text.split(/\r?\n/)
+  if (!/^M-SEARCH \* HTTP\/1\.1$/i.test(requestLine.trim())) return null
+  const targetLine = headerLines.find(line => /^ST:/i.test(line))
+  return targetLine ? targetLine.slice(3).trim() : null
+}
+
+const searchReply = ({ location, target }) => Buffer.from([
+  'HTTP/1.1 200 OK',
+  'CACHE-CONTROL: max-age=1800',
+  'EXT:',
+  `LOCATION: ${location}`,
+  `SERVER: ${REAL_BOX_SERVER}`,
+  `ST: ${target}`,
+  `USN: ${SSDP_UDN}::${target}`,
+  '',
+  ''
+].join('\r\n'))
+
+const joinSsdpGroup = ({ socket, address }) => {
+  try {
+    socket.addMembership(SSDP_ADDRESS, address)
+  } catch {
+    return null
+  }
+}
+
+const closeQuietly = (socket) => {
+  try {
+    socket.close()
+  } catch {
+    return null
+  }
+}
+
+const lanAddresses = () => Object.values(os.networkInterfaces()).flat()
+  .filter(entry => entry && entry.family === 'IPv4' && !entry.internal)
+  .map(entry => entry.address)
+
+const lanAddress = () => lanAddresses()[0] ?? '127.0.0.1'
 
 const rangeStartOf = (header) => {
   const match = String(header ?? '').match(/bytes=(\d+)-/)
