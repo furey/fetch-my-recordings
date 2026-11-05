@@ -94,12 +94,14 @@ export const startFakeBox = async ({
   bytesPerSecond = 0,
   rootFolders = ['Recordings', 'Live TV'],
   failingBrowses = [],
+  browseDelayMs = 0,
   cancelled = false
 } = {}) => {
   const catalogue = buildCatalogue(cancelled ? [] : shows)
   const requests = []
   const attempts = new Map()
   const forgotten = new Set()
+  const browses = { waiting: 0 }
   const mediaServerXml = cancelled
     ? (await fs.readFile(path.join(fixturesDir, 'cancelled-media-server.xml'), 'utf8')).replace(/<friendlyName>[^<]*<\/friendlyName>/, `<friendlyName>STB ${escapeXml(host)}</friendlyName>`)
     : (await fs.readFile(mediaServerFixture, 'utf8')).replace('Fetch TV Test Box', escapeXml(name))
@@ -113,7 +115,7 @@ export const startFakeBox = async ({
     }
     if (req.method === 'GET' && req.url === '/MediaServer.xml') return sendXml(res, mediaServerXml)
     if (req.method === 'POST' && req.url === '/web/cds_control' && cancelled) return answerCancelledBrowse({ req, res, cancelledBrowse })
-    if (req.method === 'POST' && req.url === '/upnp/control/ContentDirectory') return answerBrowse({ req, res, catalogue, baseUrl: baseUrlOf(), rootFolders, failingBrowses, forgotten })
+    if (req.method === 'POST' && req.url === '/upnp/control/ContentDirectory') return answerBrowseAfter({ delayMs: browseDelayMs, browses, answer: () => answerBrowse({ req, res, catalogue, baseUrl: baseUrlOf(), rootFolders, failingBrowses, forgotten }) })
     const itemMatch = req.url.match(/^\/item\/(\d+)$/)
     if (itemMatch && (req.method === 'GET' || req.method === 'HEAD')) {
       const item = catalogue.items.get(itemMatch[1])
@@ -136,6 +138,7 @@ export const startFakeBox = async ({
     address: `${advertisedHost}:${actualPort}`,
     port: actualPort,
     requests,
+    browses,
     catalogue,
     forgetShow: (title) => forgotten.add(catalogue.showFolders.find(show => show.title === title).id),
     powerOff: () => {
@@ -181,6 +184,17 @@ const buildCatalogue = (shows) => {
     return { id: showId, title: show.title, items: showItems }
   })
   return { showFolders, items }
+}
+
+const answerBrowseAfter = async ({ delayMs, browses, answer }) => {
+  if (delayMs <= 0) return answer()
+  browses.waiting++
+  await new Promise(resolve => setTimeout(resolve, delayMs))
+  try {
+    return await answer()
+  } finally {
+    browses.waiting--
+  }
 }
 
 const answerBrowse = async ({ req, res, catalogue, baseUrl, rootFolders, failingBrowses, forgotten }) => {

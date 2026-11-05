@@ -860,6 +860,18 @@ test('unknown sizes: recordings that cannot be saved show a status instead of a 
   }, {
     title: 'Late News',
     items: [{ title: 'Late News', size: -1, duration: '0:00:00', growing: true }]
+  }, {
+    title: 'Gone Show',
+    items: [
+      { title: 'S1 E1 - Pilot', size: -1, duration: '0:30:00', missing: true },
+      { title: 'S1 E2 - Second', size: -1, duration: '0:30:00', missing: true }
+    ]
+  }, {
+    title: 'Mixed Bag',
+    items: [
+      { title: 'S1 E1 - Gone', size: -1, duration: '0:30:00', missing: true },
+      { title: 'S1 E2 - Tonight', size: -1, duration: '0:00:00', lengthUnknown: true }
+    ]
   }]
   const box = await startFakeBox({ shows })
   const userData = await freshDir('user-data-unknown-size')
@@ -877,6 +889,21 @@ test('unknown sizes: recordings that cannot be saved show a status instead of a 
     assert.equal(await lateNews.locator('.row-detail').first().textContent(), 'Still recording')
     assert.equal(await lateNews.locator('.row-side-value').first().textContent(), '')
     assert.equal(await lateNews.locator('.row-main').first().locator('input[type="checkbox"]').count(), 0)
+    const showGlyph = (title) => page.locator(`li.show-row[data-show="${title}"] > .row-main .status-glyph`).evaluate(svg => svg.innerHTML)
+    const glyphOf = async (kind) => page.locator(`.drawer .episode-row[data-status="${kind}"] .status-glyph`).first().evaluate(svg => svg.innerHTML)
+    const goneShow = page.locator('li.show-row[data-show="Gone Show"]')
+    const mixedBag = page.locator('li.show-row[data-show="Mixed Bag"]')
+    assert.equal(await goneShow.locator('.row-detail').first().textContent(), 'File missing on the box')
+    assert.equal(await mixedBag.locator('.row-detail').first().textContent(), 'Cannot be saved now')
+    assert.equal(await mixedBag.locator('.row-main').first().getAttribute('title'), 'None of these recordings can be saved now. Show them to see why.')
+    await mixedBag.locator('.row-main').first().click()
+    await goneShow.locator('.row-main').first().click()
+    await lateNews.locator('.row-main').first().click()
+    assert.equal(await showGlyph('Gone Show'), await glyphOf('missing'))
+    assert.equal(await showGlyph('Late News'), await glyphOf('recording'))
+    assert.equal(await showGlyph('Mixed Bag'), await glyphOf('size-unknown'))
+    assert.notEqual(await showGlyph('Mixed Bag'), await glyphOf('missing'))
+    for (const title of ['Mixed Bag', 'Gone Show', 'Late News']) await page.locator(`li.show-row[data-show="${title}"] > .row-main`).click()
     await show.locator('.row-main').first().click()
     const row = (title) => show.locator('.episode-row', { hasText: title })
     await row('S2 E6').getByText('May still be recording', { exact: true }).waitFor()
@@ -1303,6 +1330,39 @@ test('remembered box: a direct check of the saved address finds it without a net
   } finally {
     await app.close()
     await box.stop()
+  }
+})
+
+test('change box: a slow list from the first box that arrives late does not replace the list from the second box', async () => {
+  const slowBox = await startFakeBox({ name: 'Slow Box', browseDelayMs: 1500, shows: [{ title: 'Slow Show', items: [{ title: 'Slow Show', size: 3 * MB, duration: '0:30:00' }] }] })
+  const quickBox = await startFakeBox({ name: 'Quick Box', shows: [{ title: 'Quick Show', items: [{ title: 'Quick Show', size: 3 * MB, duration: '0:30:00' }] }] })
+  const userData = await freshDir('user-data-change-box')
+  const saveFolder = await freshDir('change-box')
+  await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify({ lastAddress: slowBox.address, lastFolder: saveFolder }))
+  const app = await launchApp({ userData })
+  try {
+    const page = await openApp(app)
+    await page.getByRole('heading', { name: 'Reading your recordings' }).waitFor()
+    await page.getByRole('button', { name: 'Change', exact: true }).click()
+    await page.getByLabel('Or type its IP address').fill(quickBox.address)
+    await page.getByRole('button', { name: 'Connect' }).click()
+    await page.getByRole('heading', { name: 'Choose recordings' }).waitFor()
+    assert.ok(slowBox.browses.waiting > 0, 'the slow box finished its list before the quick box was chosen')
+    await waitUntil(() => slowBox.browses.waiting === 0, 20000)
+    await page.waitForTimeout(500)
+    assert.equal(await page.locator('li.show-row[data-show="Quick Show"]').count(), 1)
+    await page.getByRole('button', { name: 'Next' }).click()
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await waitForFinish({ page, heading: 'All done', timeout: 60000 })
+    assert.deepEqual(await totals(page), { 'Saved': '1', 'Already saved': '0', 'Not saved': '0' })
+    const files = (await listFiles(saveFolder)).filter(file => file.endsWith('.ts'))
+    assert.deepEqual(files, ['Quick Show/Quick Show.ts'])
+    const settings = JSON.parse(await fs.readFile(path.join(userData, 'settings.json'), 'utf8'))
+    assert.equal(settings.lastAddress, quickBox.address)
+  } finally {
+    await app.close()
+    await slowBox.stop()
+    await quickBox.stop()
   }
 })
 

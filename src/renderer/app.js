@@ -607,19 +607,19 @@ const statusGlyph = (kind) => {
   return svg
 }
 
-const NOT_AVAILABLE_GLYPH = [
+const CLOCK_GLYPH = [
   ['circle', { cx: 12, cy: 12, r: 9, fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }],
-  ['path', { d: 'M5.8 18.2L18.2 5.8', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round' }]
+  ['path', { d: 'M12 7.5V12l3 2', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }]
 ]
 
 const STATUS_GLYPHS = {
   recording: [['circle', { cx: 12, cy: 12, r: 6, fill: 'currentColor' }]],
-  'size-unknown': [
+  'size-unknown': CLOCK_GLYPH,
+  missing: [
     ['circle', { cx: 12, cy: 12, r: 9, fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }],
-    ['path', { d: 'M12 7.5V12l3 2', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }]
+    ['path', { d: 'M5.8 18.2L18.2 5.8', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round' }]
   ],
-  missing: NOT_AVAILABLE_GLYPH,
-  mixed: NOT_AVAILABLE_GLYPH
+  mixed: CLOCK_GLYPH
 }
 
 const episodeSide = ({ episode, savedState }) => {
