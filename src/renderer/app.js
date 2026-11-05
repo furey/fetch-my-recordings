@@ -311,7 +311,8 @@ const notFoundInfo = () => openInfo({
       h('li', {}, 'the Fetch box is turned on'),
       h('li', {}, 'this computer is on the same Wi-Fi or home network as the Fetch box')),
     h('p', {}, 'Then search again, or type the IP address of the box.'),
-    h('p', { id: 'firewall-tip' }, 'If a firewall app (such as Little Snitch) or your computer asked to allow Fetch My Recordings on your local network, allow it, then choose Search again.')
+    h('p', { id: 'firewall-tip' }, 'If a firewall app (such as Little Snitch) or your computer asked to allow Fetch My Recordings on your local network, allow it, then choose Search again.'),
+    h('p', { id: 'vpn-tip' }, 'A VPN that sends all traffic through its tunnel can block the search. Allow local network access in the VPN app, or type the IP address of the box.')
   ]
 })
 
@@ -486,16 +487,17 @@ const savedSummaryLine = () => {
 }
 
 const showRow = (show) => {
-  const savable = show.episodes.filter(episode => !episode.stillRecording)
-  const checkbox = h('input', { type: 'checkbox', disabled: savable.length === 0, 'aria-label': show.title })
+  const savable = show.episodes.filter(isSavable)
+  const status = savable.length === 0 ? showStatus(show) : null
+  const checkbox = h('input', { type: 'checkbox', 'aria-label': show.title })
   const row = { onChange: () => {} }
   const episodeRows = show.episodes.map(episode => episodeRow({ episode, onChange: () => row.onChange() }))
   const drawer = h('ul', { className: 'drawer', hidden: !state.open.has(show.id) }, ...episodeRows.map(item => item.element))
   const side = h('span', { className: 'row-side-value mono' })
   const reveal = h('span', { className: 'row-reveal' })
-  const detail = h('span', { className: 'row-detail' })
-  const main = h('div', { className: 'row-main is-clickable', role: 'button', tabindex: '0', 'aria-expanded': String(state.open.has(show.id)) },
-    h('label', { className: 'check', onclick: (event) => event.stopPropagation() }, checkbox),
+  const detail = h('span', { className: `row-detail${status ? ` is-${status.kind}` : ''}` })
+  const main = h('div', { className: `row-main is-clickable${status ? ' is-unsavable' : ''}`, role: 'button', tabindex: '0', 'aria-expanded': String(state.open.has(show.id)), title: status?.reason },
+    status ? statusIcon(status) : h('label', { className: 'check', onclick: (event) => event.stopPropagation() }, checkbox),
     h('span', { className: 'row-text' }, h('span', { className: 'row-title' }, show.title), detail),
     h('span', { className: 'row-side' }, reveal, h('br', {}), side))
 
@@ -516,7 +518,7 @@ const showRow = (show) => {
     const chosen = savable.filter(episode => state.selected.has(episode.id)).length
     checkbox.checked = chosen > 0 && chosen === savable.length
     checkbox.indeterminate = chosen > 0 && chosen < savable.length
-    side.textContent = `${chosen} of ${show.episodes.length}`
+    side.textContent = savable.length > 0 ? `${chosen} of ${savable.length}` : ''
     detail.textContent = showDetail(show)
     reveal.textContent = state.open.has(show.id) ? 'Hide' : 'Show'
     episodeRows.forEach(item => item.refresh())
@@ -528,29 +530,99 @@ const showRow = (show) => {
 }
 
 const episodeRow = ({ episode, onChange }) => {
-  const checkbox = h('input', { type: 'checkbox', disabled: episode.stillRecording, 'aria-label': episode.title })
+  if (!isSavable(episode)) return unsavableEpisodeRow(episode)
+  const checkbox = h('input', { type: 'checkbox', 'aria-label': episode.title })
   checkbox.addEventListener('change', () => {
     checkbox.checked ? state.selected.add(episode.id) : state.selected.delete(episode.id)
     onChange()
   })
   const savedState = savedStateOf(episode)
-  const main = h('div', { className: `row-main${episode.stillRecording ? '' : ' is-clickable'}`, 'data-saved': savedState },
+  const main = h('div', { className: 'row-main is-clickable', 'data-saved': savedState },
     h('label', { className: 'check', onclick: (event) => event.stopPropagation() }, checkbox),
     h('span', { className: 'row-text' },
       h('span', { className: 'row-title' }, episode.title),
-      h('span', { className: 'row-detail' }, episodeDetail(episode))),
+      h('span', { className: 'row-detail' }, formatDuration(episode.duration))),
     episodeSide({ episode, savedState }))
-  main.addEventListener('click', () => { if (!checkbox.disabled) checkbox.click() })
+  main.addEventListener('click', () => checkbox.click())
   return {
     element: h('li', { className: 'row episode-row', 'data-episode': episode.id }, main),
     refresh: () => { checkbox.checked = state.selected.has(episode.id) }
   }
 }
 
-const episodeDetail = (episode) => (episode.stillRecording ? 'Still recording' : formatDuration(episode.duration))
+const unsavableEpisodeRow = (episode) => {
+  const status = episodeStatus(episode)
+  const main = h('div', { className: 'row-main is-unsavable', title: status.reason },
+    statusIcon(status),
+    h('span', { className: 'row-text' },
+      h('span', { className: 'row-title' }, episode.title),
+      h('span', { className: `row-detail is-${status.kind}` }, status.label)),
+    h('span', { className: 'row-side' }))
+  return {
+    element: h('li', { className: 'row episode-row', 'data-episode': episode.id, 'data-status': status.kind }, main),
+    refresh: () => {}
+  }
+}
+
+const episodeStatus = (episode) => {
+  if (episode.unavailable) return UNSAVABLE_STATUSES.missing
+  if (episode.growing) return UNSAVABLE_STATUSES.recording
+  return UNSAVABLE_STATUSES.sizeUnknown
+}
+
+const showStatus = (show) => {
+  const kinds = new Set(show.episodes.map(episode => episodeStatus(episode).kind))
+  if (kinds.size === 1) return episodeStatus(show.episodes[0])
+  return UNSAVABLE_STATUSES.mixed
+}
+
+const UNSAVABLE_STATUSES = {
+  recording: {
+    kind: 'recording',
+    label: 'Still recording',
+    reason: 'The Fetch box is recording this now. After it ends, go Back and choose the box again to save it.'
+  },
+  sizeUnknown: {
+    kind: 'size-unknown',
+    label: 'May still be recording',
+    reason: 'The Fetch box has not given a size for this recording yet. It may still be recording. After it ends, go Back and choose the box again to save it.'
+  },
+  missing: {
+    kind: 'missing',
+    label: 'File missing on the box',
+    reason: 'The Fetch box lists this recording, but its file could not be opened. It may have been deleted on the box.'
+  },
+  mixed: {
+    kind: 'mixed',
+    label: 'Cannot be saved now',
+    reason: 'None of these recordings can be saved now. Show them to see why.'
+  }
+}
+
+const statusIcon = (status) => h('span', { className: `check is-status is-${status.kind}`, role: 'img', 'aria-label': 'Cannot be saved' }, statusGlyph(status.kind))
+
+const statusGlyph = (kind) => {
+  const svg = svgElement('svg', { viewBox: '0 0 24 24', width: 24, height: 24, class: 'status-glyph', 'aria-hidden': 'true' })
+  STATUS_GLYPHS[kind].forEach(([tag, attributes]) => svg.append(svgElement(tag, attributes)))
+  return svg
+}
+
+const CLOCK_GLYPH = [
+  ['circle', { cx: 12, cy: 12, r: 9, fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }],
+  ['path', { d: 'M12 7.5V12l3 2', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }]
+]
+
+const STATUS_GLYPHS = {
+  recording: [['circle', { cx: 12, cy: 12, r: 6, fill: 'currentColor' }]],
+  'size-unknown': CLOCK_GLYPH,
+  missing: [
+    ['circle', { cx: 12, cy: 12, r: 9, fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }],
+    ['path', { d: 'M5.8 18.2L18.2 5.8', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round' }]
+  ],
+  mixed: CLOCK_GLYPH
+}
 
 const episodeSide = ({ episode, savedState }) => {
-  if (episode.stillRecording) return h('span', { className: 'row-side' })
   if (savedState === 'saved') return h('span', { className: 'row-side is-saved' }, 'Saved')
   if (savedState === 'missing') {
     return h('span', { className: 'row-side' }, h('button', {
@@ -607,10 +679,14 @@ const refreshSelectionSummary = ({ summary, next, allButton, noneButton }) => {
 const selectAll = () => savableEpisodes(state.shows).forEach(episode => state.selected.add(episode.id))
 
 const showDetail = (show) => {
-  const savable = show.episodes.filter(episode => !episode.stillRecording)
-  const saved = savable.filter(episode => savedStateOf(episode) === 'saved').length
-  if (savable.length > 0 && saved === savable.length) return 'All saved'
-  return `${plural(show.episodes.length, 'recording')} · ${formatBytes(sumSizes(show.episodes))}`
+  const savable = show.episodes.filter(isSavable)
+  if (savable.length === 0) return showStatus(show).label
+  const unsavable = show.episodes.length - savable.length
+  const allSaved = savable.every(episode => savedStateOf(episode) === 'saved')
+  return [
+    ...(allSaved ? ['All saved'] : [plural(savable.length, 'recording'), formatBytes(sumSizes(savable))]),
+    unsavable > 0 && `${unsavable} cannot be saved now`
+  ].filter(Boolean).join(' · ')
 }
 
 const folderScreen = () => {
@@ -1084,7 +1160,7 @@ const saveAgainAfterLostBox = async () => {
 const saveSameRecordings = ({ counts, ids }) => {
   const left = new Map(counts)
   const candidates = state.shows.flatMap(show => show.episodes
-    .filter(episode => !episode.stillRecording)
+    .filter(isSavable)
     .map(episode => ({ episode, key: recordingKey({ show, episode }) })))
   const sameIds = candidates.filter(({ episode, key }) => ids.has(episode.id) && takeOne({ left, key }))
   const sameIdSet = new Set(sameIds.map(({ episode }) => episode.id))
@@ -1319,7 +1395,9 @@ const pauseWhenHidden = () => {
 
 const markElement = ({ large = false } = {}) => h('img', { className: `mark${large ? ' is-large' : ''}`, src: 'mark.svg', alt: '', width: large ? 104 : 36, height: large ? 104 : 36 })
 
-const savableEpisodes = (shows) => shows.flatMap(show => show.episodes).filter(episode => !episode.stillRecording)
+const savableEpisodes = (shows) => shows.flatMap(show => show.episodes).filter(isSavable)
+
+const isSavable = (episode) => !episode.stillRecording && !episode.unavailable
 
 const sumSizes = (episodes) => episodes.reduce((total, episode) => total + (episode.size || 0), 0)
 

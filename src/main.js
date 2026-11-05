@@ -37,6 +37,7 @@ const state = {
   boxes: new Map(),
   shows: [],
   summaries: [],
+  listingRequest: 0,
   activeSave: null,
   savedFolder: null,
   closingAfterStop: false,
@@ -480,11 +481,14 @@ const registerIpc = ({ settings, history }) => {
   handle('recordings:list', async ({ boxId }) => {
     const location = state.boxes.get(boxId)
     if (!location) return { error: 'unknown-box' }
-    const onProgress = (progress) => send('recordings:progress', progress)
+    const request = ++state.listingRequest
+    const isLatestRequest = () => request === state.listingRequest
+    const onProgress = (progress) => { if (isLatestRequest()) send('recordings:progress', progress) }
     try {
       const address = new URL(location.url).hostname
       const { shows, summaries, outcome } = await listRecordings({ location, onProgress })
       state.log.write(describeListing({ address, ...outcome }))
+      if (!isLatestRequest()) return { error: 'superseded' }
       const problem = listingProblemFor(outcome.outcome)
       if (problem) return { problem }
       const box = describeBox(location)
@@ -495,6 +499,7 @@ const registerIpc = ({ settings, history }) => {
         boxKey: box.key,
         folder: lastFolder || defaultSaveFolder()
       })
+      if (!isLatestRequest()) return { error: 'superseded' }
       state.shows = shows
       state.summaries = summaries.map(show => ({ ...show, episodes: show.episodes.map(episode => ({ ...episode, saved: saved[episode.id] })) }))
       state.boxKey = box.key

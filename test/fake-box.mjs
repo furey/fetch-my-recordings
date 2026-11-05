@@ -41,7 +41,7 @@ export const demoShows = ({ size = 3 * MB } = {}) => [
     title: 'Bigger Brother',
     items: [
       { title: 'S2 E5 - Day Forty', size: size + 1024, duration: '0:28:45' },
-      { title: 'S2 E6 - Eviction Night', size: -1, duration: '0:00:00', stillRecording: true }
+      { title: 'S2 E6 - Eviction Night', size: -1, duration: '0:00:00', lengthUnknown: true }
     ]
   },
   {
@@ -94,12 +94,14 @@ export const startFakeBox = async ({
   bytesPerSecond = 0,
   rootFolders = ['Recordings', 'Live TV'],
   failingBrowses = [],
+  browseDelayMs = 0,
   cancelled = false
 } = {}) => {
   const catalogue = buildCatalogue(cancelled ? [] : shows)
   const requests = []
   const attempts = new Map()
   const forgotten = new Set()
+  const browses = { waiting: 0 }
   const mediaServerXml = cancelled
     ? (await fs.readFile(path.join(fixturesDir, 'cancelled-media-server.xml'), 'utf8')).replace(/<friendlyName>[^<]*<\/friendlyName>/, `<friendlyName>STB ${escapeXml(host)}</friendlyName>`)
     : (await fs.readFile(mediaServerFixture, 'utf8')).replace('Fetch TV Test Box', escapeXml(name))
@@ -113,11 +115,11 @@ export const startFakeBox = async ({
     }
     if (req.method === 'GET' && req.url === '/MediaServer.xml') return sendXml(res, mediaServerXml)
     if (req.method === 'POST' && req.url === '/web/cds_control' && cancelled) return answerCancelledBrowse({ req, res, cancelledBrowse })
-    if (req.method === 'POST' && req.url === '/upnp/control/ContentDirectory') return answerBrowse({ req, res, catalogue, baseUrl: baseUrlOf(), rootFolders, failingBrowses, forgotten })
+    if (req.method === 'POST' && req.url === '/upnp/control/ContentDirectory') return answerBrowseAfter({ delayMs: browseDelayMs, browses, answer: () => answerBrowse({ req, res, catalogue, baseUrl: baseUrlOf(), rootFolders, failingBrowses, forgotten }) })
     const itemMatch = req.url.match(/^\/item\/(\d+)$/)
     if (itemMatch && (req.method === 'GET' || req.method === 'HEAD')) {
       const item = catalogue.items.get(itemMatch[1])
-      if (!item) return notFound(res)
+      if (!item || item.missing) return notFound(res)
       const attempt = (attempts.get(item.id) ?? 0) + 1
       attempts.set(item.id, attempt)
       return sendRecording({ req, res, item, quirks: { ...DEFAULT_QUIRKS, ...quirks, ...item.quirks }, attempt, bytesPerSecond })
@@ -136,6 +138,7 @@ export const startFakeBox = async ({
     address: `${advertisedHost}:${actualPort}`,
     port: actualPort,
     requests,
+    browses,
     catalogue,
     forgetShow: (title) => forgotten.add(catalogue.showFolders.find(show => show.title === title).id),
     powerOff: () => {
@@ -167,7 +170,7 @@ const buildCatalogue = (shows) => {
     const showId = String(100 + showIndex)
     const showItems = show.items.map((item, itemIndex) => {
       const id = String(1000 + showIndex * 100 + itemIndex)
-      const recordingInProgress = item.stillRecording || item.size <= 0
+      const recordingInProgress = item.lengthUnknown || item.growing || item.listedAsRecording || item.missing || item.size <= 0
       const entry = {
         ...item,
         id,
@@ -181,6 +184,17 @@ const buildCatalogue = (shows) => {
     return { id: showId, title: show.title, items: showItems }
   })
   return { showFolders, items }
+}
+
+const answerBrowseAfter = async ({ delayMs, browses, answer }) => {
+  if (delayMs <= 0) return answer()
+  browses.waiting++
+  await new Promise(resolve => setTimeout(resolve, delayMs))
+  try {
+    return await answer()
+  } finally {
+    browses.waiting--
+  }
 }
 
 const answerBrowse = async ({ req, res, catalogue, baseUrl, rootFolders, failingBrowses, forgotten }) => {
@@ -233,13 +247,21 @@ const container = ({ id, parentId, title }) =>
   `<container id="${id}" parentID="${parentId}" restricted="1"><dc:title>${escapeXml(title)}</dc:title><upnp:class>object.container</upnp:class></container>`
 
 const itemXml = ({ item, baseUrl }) => {
-  const listedSize = item.actualSize > 0 ? item.actualSize + (item.quirks.overstate ?? FETCH_BOX_OVERSTATEMENT) : -1
+  const listedSize = listedSizeOf(item)
   const taskName = item.parentTaskName ? ` parentTaskName="${escapeXml(item.parentTaskName)}"` : ''
   return `<item id="${item.id}" parentID="${item.parentId}" restricted="1"><dc:title>${escapeXml(item.title)}</dc:title>` +
     `<dc:description>${escapeXml(item.title)}</dc:description><upnp:class>object.item.videoItem</upnp:class>` +
     `<res protocolInfo="http-get:*:video/mpeg-tts:DLNA.ORG_PN=AVC_TS_HD_AC3;DLNA.ORG_OP=01" size="${listedSize}" duration="${item.duration ?? '0:30:00'}"${taskName}>` +
     `${baseUrl}/item/${item.id}</res></item>`
 }
+
+const listedSizeOf = (item) => {
+  if (item.listedAsRecording) return RECORDING_MARKER_SIZE
+  if (item.actualSize > 0 && !item.listedSizeUnknown) return item.actualSize + (item.quirks.overstate ?? FETCH_BOX_OVERSTATEMENT)
+  return -1
+}
+
+const RECORDING_MARKER_SIZE = 4398046510080
 
 const browseEnvelope = (didlXml, count) => `<?xml version="1.0" encoding="utf-8"?>
 <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
@@ -256,10 +278,7 @@ const browseEnvelope = (didlXml, count) => `<?xml version="1.0" encoding="utf-8"
 const sendRecording = ({ req, res, item, quirks, attempt, bytesPerSecond }) => {
   const statedSize = item.actualSize + (quirks.overstate ?? 0)
   const start = rangeStartOf(req.headers.range)
-  if (item.actualSize <= 0) {
-    res.writeHead(200, { 'Content-Type': 'video/mpeg', 'Content-Length': '4398046510080' })
-    return res.end()
-  }
+  if (item.actualSize <= 0) return sendRecordingInProgress({ res, item, attempt })
   if (start !== null && quirks.rangeNotSatisfiable) {
     res.writeHead(416, { 'Content-Range': `bytes */${statedSize}` })
     return res.end()
@@ -279,6 +298,18 @@ const sendRecording = ({ req, res, item, quirks, attempt, bytesPerSecond }) => {
   const end = dropAt > from ? Math.min(dropAt, item.actualSize) : item.actualSize
   streamBytes({ res, item, from, end, bytesPerSecond, finish: () => (end < item.actualSize || quirks.resetAtEnd ? resetConnection(res) : res.end()) })
 }
+
+const sendRecordingInProgress = ({ res, item, attempt }) => {
+  const headers = item.growing
+    ? { 'Content-Type': 'video/mpeg', 'Content-Length': String(attempt * GROWTH_PER_REQUEST) }
+    : item.listedAsRecording
+      ? { 'Content-Type': 'video/mpeg', 'Content-Length': String(RECORDING_MARKER_SIZE) }
+      : { 'Content-Type': 'video/mpeg', 'Transfer-Encoding': 'chunked' }
+  res.writeHead(200, headers)
+  res.end()
+}
+
+const GROWTH_PER_REQUEST = 1024 * 1024
 
 const resetConnection = (res) => {
   if (res.socket) res.socket.destroy()

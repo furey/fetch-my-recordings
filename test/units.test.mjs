@@ -50,6 +50,12 @@ test('reasons: each result gets a plain reason with no error codes', () => {
   assert.equal(reason('failed', { error: 'Download initiation failed: connect ETIMEDOUT 192.168.1.50:49152' }), asleep)
   assert.equal(reason('failed', { error: 'Download initiation failed: connect EHOSTDOWN 192.168.1.50:49152' }), asleep)
   assert.notEqual(reason('failed', { error: 'Write error: ETIMEDOUT: connection timed out, write' }), asleep)
+  assert.equal(reason('failed', { error: 'The box lists this recording but did not send it. It may have been deleted on the box.' }), 'The Fetch box lists this recording, but its file could not be opened. It may have been deleted on the box.')
+  const missing = 'The Fetch box lists this recording, but its file could not be opened. It may have been deleted on the box.'
+  assert.equal(reason('failed', { error: 'Download initiation failed: Request failed with status code 404' }), missing)
+  assert.equal(reason('failed', { error: 'Download initiation failed: Request failed with status code 410' }), missing)
+  assert.equal(reason('failed', { unavailable: true }), missing)
+  assert.equal(reason('failed', { error: 'Download initiation failed: Request failed with status code 403' }), 'The box could not send this recording.')
   assert.equal(reason('failed', { error: 'box-unreachable' }), 'The box did not answer for 10 minutes. Check whether it is in standby. If it is, turn it on with its remote. Also check that this computer is on the same network. Then save again.')
   assert.match(reason('failed', { error: "Directory creation failed: ENAMETOOLONG: name too long, mkdir 'C:\\Users\\x\\Reset Timeout'" }), /^The file name is too long for this folder\. Choose a folder with a shorter path/)
   assert.match(reason('failed', { error: "Write error: EINVAL: invalid argument, open 'D:\\Fetch\\CON\\x.ts.part'" }), /^This folder does not accept the file name\. Choose another folder\.$/)

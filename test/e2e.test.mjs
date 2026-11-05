@@ -60,7 +60,9 @@ test('first run: no box found, type the address, choose episodes, save in the de
     assert.equal(await masterCook.locator('.row-main input[type="checkbox"]').first().evaluate(input => input.indeterminate), true)
     const coastal = page.locator('li.show-row[data-show="Bigger Brother"]')
     await coastal.locator('.row-main').first().click()
-    assert.equal(await coastal.getByLabel('S2 E6 - Eviction Night').isDisabled(), true)
+    const eviction = coastal.locator('.episode-row', { hasText: 'S2 E6' })
+    assert.equal(await eviction.locator('input[type="checkbox"]').count(), 0)
+    assert.equal(await eviction.getAttribute('data-status'), 'size-unknown')
     await capture({ app, page, name: '2-recordings-episodes' })
     await page.getByText('9 recordings selected').waitFor()
 
@@ -845,6 +847,101 @@ test('saved recordings: still there is unticked, moved or deleted is ticked with
   }
 })
 
+test('unknown sizes: recordings that cannot be saved show a status instead of a checkbox, and one with a steady length saves whole', async () => {
+  const shows = [{
+    title: 'Bigger Brother',
+    items: [
+      { title: 'S2 E4 - House Meeting', size: 3 * MB, duration: '0:29:10' },
+      { title: 'S2 E5 - Day Forty', size: 3 * MB + 1024, duration: '0:28:45', listedSizeUnknown: true },
+      { title: 'S2 E6 - Eviction Night', size: -1, duration: '0:00:00', lengthUnknown: true },
+      { title: 'S2 E7 - The Return', size: -1, duration: '0:30:00', missing: true },
+      { title: 'S2 E8 - Live Finale', size: -1, duration: '0:00:00', listedAsRecording: true }
+    ]
+  }, {
+    title: 'Late News',
+    items: [{ title: 'Late News', size: -1, duration: '0:00:00', growing: true }]
+  }, {
+    title: 'Gone Show',
+    items: [
+      { title: 'S1 E1 - Pilot', size: -1, duration: '0:30:00', missing: true },
+      { title: 'S1 E2 - Second', size: -1, duration: '0:30:00', missing: true }
+    ]
+  }, {
+    title: 'Mixed Bag',
+    items: [
+      { title: 'S1 E1 - Gone', size: -1, duration: '0:30:00', missing: true },
+      { title: 'S1 E2 - Tonight', size: -1, duration: '0:00:00', lengthUnknown: true }
+    ]
+  }]
+  const box = await startFakeBox({ shows })
+  const userData = await freshDir('user-data-unknown-size')
+  const saveFolder = await freshDir('unknown-size')
+  await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify({ lastAddress: box.address, lastFolder: saveFolder }))
+  const app = await launchApp({ userData })
+  try {
+    const page = await openApp(app)
+    await page.getByRole('heading', { name: 'Choose recordings' }).waitFor({ timeout: 30000 })
+    await page.locator('#saved-summary', { hasText: '2 new' }).waitFor()
+    const show = page.locator('li.show-row[data-show="Bigger Brother"]')
+    assert.equal(await show.locator('.row-detail').first().textContent(), '2 recordings · 6 MB · 3 cannot be saved now')
+    assert.equal(await show.locator('.row-side-value').first().textContent(), '2 of 2')
+    const lateNews = page.locator('li.show-row[data-show="Late News"]')
+    assert.equal(await lateNews.locator('.row-detail').first().textContent(), 'Still recording')
+    assert.equal(await lateNews.locator('.row-side-value').first().textContent(), '')
+    assert.equal(await lateNews.locator('.row-main').first().locator('input[type="checkbox"]').count(), 0)
+    const showGlyph = (title) => page.locator(`li.show-row[data-show="${title}"] > .row-main .status-glyph`).evaluate(svg => svg.innerHTML)
+    const glyphOf = async (kind) => page.locator(`.drawer .episode-row[data-status="${kind}"] .status-glyph`).first().evaluate(svg => svg.innerHTML)
+    const goneShow = page.locator('li.show-row[data-show="Gone Show"]')
+    const mixedBag = page.locator('li.show-row[data-show="Mixed Bag"]')
+    assert.equal(await goneShow.locator('.row-detail').first().textContent(), 'File missing on the box')
+    assert.equal(await mixedBag.locator('.row-detail').first().textContent(), 'Cannot be saved now')
+    assert.equal(await mixedBag.locator('.row-main').first().getAttribute('title'), 'None of these recordings can be saved now. Show them to see why.')
+    await mixedBag.locator('.row-main').first().click()
+    await goneShow.locator('.row-main').first().click()
+    await lateNews.locator('.row-main').first().click()
+    assert.equal(await showGlyph('Gone Show'), await glyphOf('missing'))
+    assert.equal(await showGlyph('Late News'), await glyphOf('recording'))
+    assert.equal(await showGlyph('Mixed Bag'), await glyphOf('size-unknown'))
+    assert.notEqual(await showGlyph('Mixed Bag'), await glyphOf('missing'))
+    for (const title of ['Mixed Bag', 'Gone Show', 'Late News']) await page.locator(`li.show-row[data-show="${title}"] > .row-main`).click()
+    await show.locator('.row-main').first().click()
+    const row = (title) => show.locator('.episode-row', { hasText: title })
+    await row('S2 E6').getByText('May still be recording', { exact: true }).waitFor()
+    await row('S2 E7').getByText('File missing on the box', { exact: true }).waitFor()
+    await row('S2 E8').getByText('Still recording', { exact: true }).waitFor()
+    assert.deepEqual(await show.locator('.drawer .episode-row').evaluateAll(rows => rows.map(item => item.dataset.status ?? 'savable')), ['savable', 'savable', 'size-unknown', 'missing', 'recording'])
+    assert.equal(await row('S2 E7').locator('input[type="checkbox"]').count(), 0)
+    assert.equal(await row('S2 E7').getByRole('img').getAttribute('aria-label'), 'Cannot be saved')
+    assert.equal(await row('S2 E7').locator('.row-main').getAttribute('title'), 'The Fetch box lists this recording, but its file could not be opened. It may have been deleted on the box.')
+    assert.match(await row('S2 E8').locator('.row-main').getAttribute('title'), /is recording this now/)
+    assert.match(await row('S2 E6').locator('.row-main').getAttribute('title'), /has not given a size/)
+    const colourOf = (title, selector) => row(title).locator(selector).evaluate(element => getComputedStyle(element).color)
+    assert.equal(await colourOf('S2 E8', '.row-detail'), await colourOf('S2 E6', '.row-detail'))
+    assert.notEqual(await colourOf('S2 E8', '.check'), await colourOf('S2 E6', '.check'))
+    await row('S2 E7').locator('.row-main').click()
+    assert.equal(await row('S2 E7').locator('.row-main').evaluate(element => element.classList.contains('is-clickable')), false)
+    assert.equal(await row('S2 E7').locator('.row-side').textContent(), '')
+    assert.equal(await show.getByLabel('S2 E5 - Day Forty').isChecked(), true)
+    await page.getByText('2 recordings selected').waitFor()
+    await page.getByRole('button', { name: 'Select none' }).click()
+    await page.getByRole('button', { name: 'Select all' }).click()
+    await page.getByText('2 recordings selected').waitFor()
+    assert.equal(await show.locator('.row-main input[type="checkbox"]').first().isChecked(), true)
+    await capture({ app, page, name: '2-recordings-unavailable' })
+
+    await page.getByRole('button', { name: 'Next' }).click()
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await waitForFinish({ page, heading: 'All done', timeout: 60000 })
+    assert.deepEqual(await totals(page), { 'Saved': '2', 'Already saved': '0', 'Not saved': '0' })
+    const files = await listFiles(saveFolder)
+    assert.equal(files.some(file => file.includes('The Return')), false)
+    await assertSameBytes({ box, folder: saveFolder, file: 'Bigger Brother/S2 E5 - Day Forty.ts', title: 'S2 E5 - Day Forty' })
+  } finally {
+    await app.close()
+    await box.stop()
+  }
+})
+
 test('saved recordings: a fetchtv.json in the folder marks files saved by the command-line tool', async () => {
   const box = await startFakeBox({ shows: [demoShows()[0]] })
   const userData = await freshDir('user-data-cli')
@@ -1178,6 +1275,7 @@ test('not found: searches twice before saying so, names the firewall, and every 
     assert.equal(silent.requests.length, 3)
     await page.getByRole('button', { name: 'More about: No Fetch box found' }).click()
     await page.locator('#firewall-tip', { hasText: 'If a firewall app (such as Little Snitch) or your computer asked to allow Fetch My Recordings on your local network, allow it, then choose Search again.' }).waitFor()
+    await page.locator('#vpn-tip', { hasText: 'A VPN that sends all traffic through its tunnel can block the search. Allow local network access in the VPN app, or type the IP address of the box.' }).waitFor()
     await capture({ app, page, name: '1-not-found-info' })
     await page.keyboard.press('Escape')
 
@@ -1235,6 +1333,38 @@ test('remembered box: a direct check of the saved address finds it without a net
   }
 })
 
+test('change box: a slow list from the first box that arrives late does not replace the list from the second box', async () => {
+  const slowBox = await startFakeBox({ name: 'Slow Box', browseDelayMs: 3000, shows: [{ title: 'Slow Show', items: [{ title: 'Slow Show', size: 3 * MB, duration: '0:30:00' }] }] })
+  const quickBox = await startFakeBox({ name: 'Quick Box', shows: [{ title: 'Quick Show', items: [{ title: 'Quick Show', size: 3 * MB, duration: '0:30:00' }] }] })
+  const userData = await freshDir('user-data-change-box')
+  const saveFolder = await freshDir('change-box')
+  await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify({ lastAddress: slowBox.address, lastFolder: saveFolder }))
+  const app = await launchApp({ userData })
+  try {
+    const page = await openApp(app)
+    await page.getByRole('heading', { name: 'Reading your recordings' }).waitFor()
+    await page.getByRole('button', { name: 'Change', exact: true }).click()
+    await page.getByLabel('Or type its IP address').fill(quickBox.address)
+    await page.getByRole('button', { name: 'Connect' }).click()
+    await page.getByRole('heading', { name: 'Choose recordings' }).waitFor()
+    assert.ok(slowBox.browses.waiting > 0, 'the slow box finished its list before the quick box was chosen')
+    await waitUntilQuietFor({ condition: () => slowBox.browses.waiting === 0, ms: 2500, timeoutMs: 30000 })
+    assert.equal(await page.locator('li.show-row[data-show="Quick Show"]').count(), 1)
+    await page.getByRole('button', { name: 'Next' }).click()
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await waitForFinish({ page, heading: 'All done', timeout: 60000 })
+    assert.deepEqual(await totals(page), { 'Saved': '1', 'Already saved': '0', 'Not saved': '0' })
+    const files = (await listFiles(saveFolder)).filter(file => file.endsWith('.ts'))
+    assert.deepEqual(files, ['Quick Show/Quick Show.ts'])
+    const settings = JSON.parse(await fs.readFile(path.join(userData, 'settings.json'), 'utf8'))
+    assert.equal(settings.lastAddress, quickBox.address)
+  } finally {
+    await app.close()
+    await slowBox.stop()
+    await quickBox.stop()
+  }
+})
+
 const startSilentBox = async ({ port = 0 } = {}) => {
   const requests = []
   const server = createServer((req, res) => {
@@ -1260,6 +1390,16 @@ const waitUntil = async (condition, timeoutMs = 10000) => {
   const deadline = Date.now() + timeoutMs
   while (!condition()) {
     if (Date.now() > deadline) throw new Error('Timed out waiting for a condition')
+    await new Promise(resolve => setTimeout(resolve, 50))
+  }
+}
+
+const waitUntilQuietFor = async ({ condition, ms, timeoutMs }) => {
+  const deadline = Date.now() + timeoutMs
+  let quietSince = null
+  while (quietSince === null || Date.now() - quietSince < ms) {
+    if (Date.now() > deadline) throw new Error('Timed out waiting for a quiet condition')
+    quietSince = condition() ? quietSince ?? Date.now() : null
     await new Promise(resolve => setTimeout(resolve, 50))
   }
 }
