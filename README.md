@@ -432,14 +432,17 @@ To try the app without a Fetch box, run `npm run fake-box` in a second terminal.
 
 ### Commands
 
-| Command              | Effect                                                                                    |
-| -------------------- | ----------------------------------------------------------------------------------------- |
-| `npm start`          | Bundles the app and opens it                                                              |
-| `npm test`           | Runs the unit tests and the end-to-end tests, which drive the app against the pretend box |
-| `npm run dist`       | Builds the app for the computer you run it on, into `release`                             |
-| `npm run dist:mac`   | Builds the macOS `.dmg` files (any Mac, Apple chip, and Intel)                            |
-| `npm run dist:win`   | Builds the Windows installer                                                              |
-| `npm run dist:linux` | Builds the Linux AppImages (`x86_64` and `arm64`)                                         |
+| Command              | Effect                                                                                                   |
+| -------------------- | -------------------------------------------------------------------------------------------------------- |
+| `npm start`          | Bundles the app and opens it                                                                             |
+| `npm test`           | Runs the unit tests, which open no windows                                                               |
+| `npm run test:e2e`   | Bundles the app, then runs the end-to-end tests, which open the app and drive it against the pretend box |
+| `npm run dist`       | Builds the app for the computer you run it on, into `release`                                            |
+| `npm run dist:mac`   | Builds the macOS `.dmg` files (any Mac, Apple chip, and Intel)                                           |
+| `npm run dist:win`   | Builds the Windows installer                                                                             |
+| `npm run dist:linux` | Builds the Linux AppImages (`x86_64` and `arm64`)                                                        |
+
+The end-to-end tests open app windows, which take the keyboard focus while they run. The [build workflow](#build-workflow) runs them on macOS, Windows, and Linux.
 
 The end-to-end tests include a search for the pretend box over the network (SSDP). Set `FETCHTV_E2E_SKIP_SSDP=1` to skip that test when a firewall blocks it, for example Little Snitch on a Mac.
 
@@ -461,7 +464,7 @@ node scripts/check-frame-timing.mjs --mp4 /tmp/demo/demo.mp4 --out /tmp/demo
 
 ### Build workflow
 
-[`build.yml`](./.github/workflows/build.yml) runs on a push to `main` or `develop`, a version tag, a pull request, or by hand. On macOS, Windows, and Ubuntu runners it runs `npm test` (under `xvfb` on Ubuntu) and builds the app with `electron-builder`. The builds are kept as workflow artefacts.
+[`build.yml`](./.github/workflows/build.yml) runs on a push to `main` or `develop`, a version tag, a pull request, or by hand. On macOS, Windows, and Ubuntu runners it runs `npm test`, then `npm run test:e2e` (under `xvfb` on Ubuntu), and builds the app with `electron-builder`. The builds are kept as workflow artefacts.
 
 For a pushed version tag (e.g. `1.0.0`), a second job waits up to 30 minutes for the GitHub release of that tag. It then attaches these files to the release, and no others:
 
