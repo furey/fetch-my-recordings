@@ -306,8 +306,8 @@ When the app is open, choose **Help** → **Open log folder** to go there. On Wi
 
 Click **Start** on the welcome screen. The app then takes you through these steps:
 
-1. **Find your Fetch box**: the app searches your home network. If it finds no box, check that the box is on and that your computer is on the same home network, then search again. You can also type the box's IP address: four numbers with dots between them, such as `192.168.1.50`. Find it in your router's list of connected devices, or in the network details of the Fetch box's settings menu.
-2. **Choose recordings**: every recording you have not saved before starts ticked. Click **Show** next to a show to tick or untick single episodes. A recording that is still recording cannot be saved until it ends.
+1. **Find your Fetch box**: the app searches your home network. If it finds no box, check that the box is on and that your computer is on the same home network, then search again. A VPN that sends all traffic through its tunnel can block the search, so allow local network access in the VPN app. You can also type the box's IP address: four numbers with dots between them, such as `192.168.1.50`. Find it in your router's list of connected devices, or in the network details of the Fetch box's settings menu.
+2. **Choose recordings**: every recording you have not saved before starts ticked. Click **Show** next to a show to tick or untick single episodes. A recording the app cannot save has no tick box. It shows **Still recording** while the box records it, **May still be recording** when the box has not given its size yet, or **File missing on the box** when the box lists it but cannot open its file. Hold the pointer over it to see why.
 3. **Choose a folder**: the app shows the free space in the folder and the space the recordings need. Turn on **Names for Plex, Jellyfin or Kodi** if you watch recordings in one of those apps. The files are then saved as `Show/Season 01/Show - S01E02.ts`.
 4. **Save**: the app shows the progress of each recording. Your computer stays awake until the save finishes. Click **Stop** at any time.
 

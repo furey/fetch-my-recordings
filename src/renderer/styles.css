@@ -847,9 +847,26 @@ body.is-hidden .progress.is-busy > span {
   transform: none;
 }
 
-.check input:disabled {
-  border-color: var(--surface-4);
-  cursor: not-allowed;
+.check.is-status {
+  color: var(--text-3);
+  cursor: default;
+}
+
+.row-main.is-clickable .check.is-status {
+  cursor: inherit;
+}
+
+.check.is-recording {
+  color: var(--live);
+}
+
+.status-glyph {
+  display: block;
+}
+
+.row-main.is-unsavable .row-title,
+.row-main.is-unsavable .row-detail {
+  color: var(--text-3);
 }
 
 .check input:focus-visible {

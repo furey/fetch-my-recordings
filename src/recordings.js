@@ -37,10 +37,17 @@ const summariseShow = async (show) => ({
   episodes: await Promise.all(show.items.map(summariseEpisode))
 })
 
-const summariseEpisode = async (item) => ({
-  id: String(item.id),
-  title: item.title,
-  size: Number.isFinite(item.size) && item.size > 0 ? item.size : 0,
-  duration: item.duration || 0,
-  stillRecording: await isCurrentlyRecording(item)
-})
+const summariseEpisode = async (item) => {
+  const growing = item.growing === true
+  const stillRecording = growing || await isCurrentlyRecording(item)
+  const sizeListed = Number.isFinite(item.size) && item.size > 0
+  return {
+    id: String(item.id),
+    title: item.title,
+    size: sizeListed && !stillRecording ? item.size : 0,
+    duration: item.duration || 0,
+    stillRecording,
+    growing,
+    unavailable: item.unavailable === true
+  }
+}

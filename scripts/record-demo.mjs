@@ -45,7 +45,7 @@ const DEMO_SHOWS = [
     title: 'Bigger Brother',
     items: [
       { title: 'S2 E5 - Day Forty', size: 64 * MB, duration: '0:28:45' },
-      { title: 'S2 E6 - Eviction Night', size: -1, duration: '0:00:00', stillRecording: true }
+      { title: 'S2 E6 - Eviction Night', size: -1, duration: '0:00:00', lengthUnknown: true }
     ]
   }
 ]
