@@ -853,13 +853,13 @@ test('unknown sizes: recordings that cannot be saved show a status instead of a 
     items: [
       { title: 'S2 E4 - House Meeting', size: 3 * MB, duration: '0:29:10' },
       { title: 'S2 E5 - Day Forty', size: 3 * MB + 1024, duration: '0:28:45', listedSizeUnknown: true },
-      { title: 'S2 E6 - Eviction Night', size: -1, duration: '0:00:00', stillRecording: true },
+      { title: 'S2 E6 - Eviction Night', size: -1, duration: '0:00:00', lengthUnknown: true },
       { title: 'S2 E7 - The Return', size: -1, duration: '0:30:00', missing: true },
-      { title: 'S2 E8 - Live Finale', size: -1, duration: '0:00:00', stillRecording: true, listedAsRecording: true }
+      { title: 'S2 E8 - Live Finale', size: -1, duration: '0:00:00', listedAsRecording: true }
     ]
   }, {
     title: 'Late News',
-    items: [{ title: 'Late News', size: -1, duration: '0:00:00', stillRecording: true, listedAsRecording: true }]
+    items: [{ title: 'Late News', size: -1, duration: '0:00:00', growing: true }]
   }]
   const box = await startFakeBox({ shows })
   const userData = await freshDir('user-data-unknown-size')
@@ -885,7 +885,12 @@ test('unknown sizes: recordings that cannot be saved show a status instead of a 
     assert.deepEqual(await show.locator('.drawer .episode-row').evaluateAll(rows => rows.map(item => item.dataset.status ?? 'savable')), ['savable', 'savable', 'size-unknown', 'missing', 'recording'])
     assert.equal(await row('S2 E7').locator('input[type="checkbox"]').count(), 0)
     assert.equal(await row('S2 E7').getByRole('img').getAttribute('aria-label'), 'Cannot be saved')
-    assert.match(await row('S2 E7').locator('.row-main').getAttribute('title'), /its file could not be opened/)
+    assert.equal(await row('S2 E7').locator('.row-main').getAttribute('title'), 'The Fetch box lists this recording, but its file could not be opened. It may have been deleted on the box.')
+    assert.match(await row('S2 E8').locator('.row-main').getAttribute('title'), /is recording this now/)
+    assert.match(await row('S2 E6').locator('.row-main').getAttribute('title'), /has not given a size/)
+    const colourOf = (title, selector) => row(title).locator(selector).evaluate(element => getComputedStyle(element).color)
+    assert.equal(await colourOf('S2 E8', '.row-detail'), await colourOf('S2 E6', '.row-detail'))
+    assert.notEqual(await colourOf('S2 E8', '.check'), await colourOf('S2 E6', '.check'))
     await row('S2 E7').locator('.row-main').click()
     assert.equal(await row('S2 E7').locator('.row-main').evaluate(element => element.classList.contains('is-clickable')), false)
     assert.equal(await row('S2 E7').locator('.row-side').textContent(), '')
@@ -1243,6 +1248,7 @@ test('not found: searches twice before saying so, names the firewall, and every 
     assert.equal(silent.requests.length, 3)
     await page.getByRole('button', { name: 'More about: No Fetch box found' }).click()
     await page.locator('#firewall-tip', { hasText: 'If a firewall app (such as Little Snitch) or your computer asked to allow Fetch My Recordings on your local network, allow it, then choose Search again.' }).waitFor()
+    await page.locator('#vpn-tip', { hasText: 'A VPN that sends all traffic through its tunnel can block the search. Allow local network access in the VPN app, or type the IP address of the box.' }).waitFor()
     await capture({ app, page, name: '1-not-found-info' })
     await page.keyboard.press('Escape')
 

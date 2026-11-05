@@ -311,7 +311,8 @@ const notFoundInfo = () => openInfo({
       h('li', {}, 'the Fetch box is turned on'),
       h('li', {}, 'this computer is on the same Wi-Fi or home network as the Fetch box')),
     h('p', {}, 'Then search again, or type the IP address of the box.'),
-    h('p', { id: 'firewall-tip' }, 'If a firewall app (such as Little Snitch) or your computer asked to allow Fetch My Recordings on your local network, allow it, then choose Search again.')
+    h('p', { id: 'firewall-tip' }, 'If a firewall app (such as Little Snitch) or your computer asked to allow Fetch My Recordings on your local network, allow it, then choose Search again.'),
+    h('p', { id: 'vpn-tip' }, 'A VPN that sends all traffic through its tunnel can block the search. Allow local network access in the VPN app, or type the IP address of the box.')
   ]
 })
 
@@ -565,7 +566,7 @@ const unsavableEpisodeRow = (episode) => {
 
 const episodeStatus = (episode) => {
   if (episode.unavailable) return UNSAVABLE_STATUSES.missing
-  if (episode.recordingConfirmed) return UNSAVABLE_STATUSES.recording
+  if (episode.growing) return UNSAVABLE_STATUSES.recording
   return UNSAVABLE_STATUSES.sizeUnknown
 }
 

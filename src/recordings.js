@@ -38,7 +38,8 @@ const summariseShow = async (show) => ({
 })
 
 const summariseEpisode = async (item) => {
-  const stillRecording = await isCurrentlyRecording(item)
+  const growing = item.growing === true
+  const stillRecording = growing || await isCurrentlyRecording(item)
   const sizeListed = Number.isFinite(item.size) && item.size > 0
   return {
     id: String(item.id),
@@ -46,7 +47,7 @@ const summariseEpisode = async (item) => {
     size: sizeListed && !stillRecording ? item.size : 0,
     duration: item.duration || 0,
     stillRecording,
-    recordingConfirmed: stillRecording && sizeListed,
+    growing,
     unavailable: item.unavailable === true
   }
 }

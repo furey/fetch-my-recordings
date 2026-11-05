@@ -41,7 +41,7 @@ export const demoShows = ({ size = 3 * MB } = {}) => [
     title: 'Bigger Brother',
     items: [
       { title: 'S2 E5 - Day Forty', size: size + 1024, duration: '0:28:45' },
-      { title: 'S2 E6 - Eviction Night', size: -1, duration: '0:00:00', stillRecording: true }
+      { title: 'S2 E6 - Eviction Night', size: -1, duration: '0:00:00', lengthUnknown: true }
     ]
   },
   {
@@ -167,7 +167,7 @@ const buildCatalogue = (shows) => {
     const showId = String(100 + showIndex)
     const showItems = show.items.map((item, itemIndex) => {
       const id = String(1000 + showIndex * 100 + itemIndex)
-      const recordingInProgress = item.stillRecording || item.missing || item.size <= 0
+      const recordingInProgress = item.lengthUnknown || item.growing || item.listedAsRecording || item.missing || item.size <= 0
       const entry = {
         ...item,
         id,
@@ -264,10 +264,7 @@ const browseEnvelope = (didlXml, count) => `<?xml version="1.0" encoding="utf-8"
 const sendRecording = ({ req, res, item, quirks, attempt, bytesPerSecond }) => {
   const statedSize = item.actualSize + (quirks.overstate ?? 0)
   const start = rangeStartOf(req.headers.range)
-  if (item.actualSize <= 0) {
-    res.writeHead(200, { 'Content-Type': 'video/mpeg', 'Content-Length': String(RECORDING_MARKER_SIZE) })
-    return res.end()
-  }
+  if (item.actualSize <= 0) return sendRecordingInProgress({ res, item, attempt })
   if (start !== null && quirks.rangeNotSatisfiable) {
     res.writeHead(416, { 'Content-Range': `bytes */${statedSize}` })
     return res.end()
@@ -287,6 +284,18 @@ const sendRecording = ({ req, res, item, quirks, attempt, bytesPerSecond }) => {
   const end = dropAt > from ? Math.min(dropAt, item.actualSize) : item.actualSize
   streamBytes({ res, item, from, end, bytesPerSecond, finish: () => (end < item.actualSize || quirks.resetAtEnd ? resetConnection(res) : res.end()) })
 }
+
+const sendRecordingInProgress = ({ res, item, attempt }) => {
+  const headers = item.growing
+    ? { 'Content-Type': 'video/mpeg', 'Content-Length': String(attempt * GROWTH_PER_REQUEST) }
+    : item.listedAsRecording
+      ? { 'Content-Type': 'video/mpeg', 'Content-Length': String(RECORDING_MARKER_SIZE) }
+      : { 'Content-Type': 'video/mpeg', 'Transfer-Encoding': 'chunked' }
+  res.writeHead(200, headers)
+  res.end()
+}
+
+const GROWTH_PER_REQUEST = 1024 * 1024
 
 const resetConnection = (res) => {
   if (res.socket) res.socket.destroy()

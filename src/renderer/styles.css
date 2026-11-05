@@ -869,10 +869,6 @@ body.is-hidden .progress.is-busy > span {
   color: var(--text-3);
 }
 
-.row-main.is-unsavable .row-detail.is-recording {
-  color: var(--live-text);
-}
-
 .check input:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 3px;
