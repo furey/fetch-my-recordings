@@ -1334,7 +1334,7 @@ test('remembered box: a direct check of the saved address finds it without a net
 })
 
 test('change box: a slow list from the first box that arrives late does not replace the list from the second box', async () => {
-  const slowBox = await startFakeBox({ name: 'Slow Box', browseDelayMs: 1500, shows: [{ title: 'Slow Show', items: [{ title: 'Slow Show', size: 3 * MB, duration: '0:30:00' }] }] })
+  const slowBox = await startFakeBox({ name: 'Slow Box', browseDelayMs: 3000, shows: [{ title: 'Slow Show', items: [{ title: 'Slow Show', size: 3 * MB, duration: '0:30:00' }] }] })
   const quickBox = await startFakeBox({ name: 'Quick Box', shows: [{ title: 'Quick Show', items: [{ title: 'Quick Show', size: 3 * MB, duration: '0:30:00' }] }] })
   const userData = await freshDir('user-data-change-box')
   const saveFolder = await freshDir('change-box')
@@ -1348,8 +1348,7 @@ test('change box: a slow list from the first box that arrives late does not repl
     await page.getByRole('button', { name: 'Connect' }).click()
     await page.getByRole('heading', { name: 'Choose recordings' }).waitFor()
     assert.ok(slowBox.browses.waiting > 0, 'the slow box finished its list before the quick box was chosen')
-    await waitUntil(() => slowBox.browses.waiting === 0, 20000)
-    await page.waitForTimeout(500)
+    await waitUntilQuietFor({ condition: () => slowBox.browses.waiting === 0, ms: 2500, timeoutMs: 30000 })
     assert.equal(await page.locator('li.show-row[data-show="Quick Show"]').count(), 1)
     await page.getByRole('button', { name: 'Next' }).click()
     await page.getByRole('button', { name: 'Save', exact: true }).click()
@@ -1391,6 +1390,16 @@ const waitUntil = async (condition, timeoutMs = 10000) => {
   const deadline = Date.now() + timeoutMs
   while (!condition()) {
     if (Date.now() > deadline) throw new Error('Timed out waiting for a condition')
+    await new Promise(resolve => setTimeout(resolve, 50))
+  }
+}
+
+const waitUntilQuietFor = async ({ condition, ms, timeoutMs }) => {
+  const deadline = Date.now() + timeoutMs
+  let quietSince = null
+  while (quietSince === null || Date.now() - quietSince < ms) {
+    if (Date.now() > deadline) throw new Error('Timed out waiting for a quiet condition')
+    quietSince = condition() ? quietSince ?? Date.now() : null
     await new Promise(resolve => setTimeout(resolve, 50))
   }
 }
