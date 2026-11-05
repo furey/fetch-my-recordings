@@ -131,7 +131,7 @@ export const startFakeBox = async ({
   const actualPort = server.address().port
   const advertisedHost = host === '0.0.0.0' ? lanAddress() : host
   const baseUrlOf = () => `http://${advertisedHost}:${actualPort}`
-  const ssdpServer = ssdp ? await startSsdp({ location: `${baseUrlOf()}/MediaServer.xml` }) : null
+  const ssdpServer = ssdp ? await startSsdpOrClose({ server, location: `${baseUrlOf()}/MediaServer.xml` }) : null
 
   return {
     url: `${baseUrlOf()}/MediaServer.xml`,
@@ -357,6 +357,16 @@ const SSDP_ADDRESS = '239.255.255.250'
 const SSDP_PORT = 1900
 const SSDP_UDN = 'uuid:fetchtv-fake-box'
 const SSDP_TARGETS = ['upnp:rootdevice', 'urn:schemas-upnp-org:device:MediaServer:1']
+
+const startSsdpOrClose = async ({ server, location }) => {
+  try {
+    return await startSsdp({ location })
+  } catch (error) {
+    server.closeAllConnections()
+    server.close()
+    throw error
+  }
+}
 
 const startSsdp = async ({ location }) => {
   const socket = dgram.createSocket({ type: 'udp4', reuseAddr: true })
