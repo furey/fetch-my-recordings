@@ -312,7 +312,7 @@ const notFoundInfo = () => openInfo({
       h('li', {}, 'this computer is on the same Wi-Fi or home network as the Fetch box')),
     h('p', {}, 'Then search again, or type the IP address of the box.'),
     h('p', { id: 'firewall-tip' }, 'If a firewall app (such as Little Snitch) or your computer asked to allow Fetch My Recordings on your local network, allow it, then choose Search again.'),
-    h('p', { id: 'vpn-tip' }, 'A VPN that sends all traffic through its tunnel can block the search. Allow local network access in the VPN app, or type the IP address of the box.')
+    h('p', { id: 'vpn-tip' }, 'A VPN can block the search, even with local network access allowed. Type the IP address of the box instead.')
   ]
 })
 

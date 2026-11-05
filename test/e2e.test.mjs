@@ -1275,7 +1275,7 @@ test('not found: searches twice before saying so, names the firewall, and every 
     assert.equal(silent.requests.length, 3)
     await page.getByRole('button', { name: 'More about: No Fetch box found' }).click()
     await page.locator('#firewall-tip', { hasText: 'If a firewall app (such as Little Snitch) or your computer asked to allow Fetch My Recordings on your local network, allow it, then choose Search again.' }).waitFor()
-    await page.locator('#vpn-tip', { hasText: 'A VPN that sends all traffic through its tunnel can block the search. Allow local network access in the VPN app, or type the IP address of the box.' }).waitFor()
+    await page.locator('#vpn-tip', { hasText: 'A VPN can block the search, even with local network access allowed. Type the IP address of the box instead.' }).waitFor()
     await capture({ app, page, name: '1-not-found-info' })
     await page.keyboard.press('Escape')
 
