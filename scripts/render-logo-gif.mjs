@@ -11,6 +11,7 @@ const { values } = parseArgs({
   options: {
     out: { type: 'string', default: path.join(appRoot, 'docs', 'img', 'app-icon-animated.gif') },
     hold: { type: 'string', default: '2' },
+    empty: { type: 'string', default: '0.35' },
     fps: { type: 'string', default: '50' }
   }
 })
@@ -18,6 +19,7 @@ const { values } = parseArgs({
 const CYCLE_MS = 6000
 const SETTLED_MS = 1340
 const LEAVE_START_MS = 4200
+const LEAVE_END_MS = 4680
 const DISPLAY_SIZE = 128
 const SCALE = 2
 const TILE = '#141c24'
@@ -25,21 +27,25 @@ const TILE = '#141c24'
 const main = async () => {
   const fps = Number(values.fps)
   const holdMs = Number(values.hold) * 1000
+  const emptyMs = Number(values.empty) * 1000
   const work = await fs.mkdtemp(path.join(os.tmpdir(), 'fetch-my-recordings-logo-'))
-  const frameTimes = appTimeline({ fps, holdMs })
+  const frameTimes = appTimeline({ fps, holdMs, emptyMs })
   const frames = mergeRepeatedFrames({ shots: await renderFrames(frameTimes), frameMs: 1000 / fps })
   await encodeGif({ frames, dir: work, out: path.resolve(values.out) })
   await fs.rm(work, { recursive: true })
-  console.log(`${frameTimes.length} steps at ${fps} fps as ${frames.length} GIF frames, hold ${holdMs} ms: ${values.out}`)
+  console.log(`${frameTimes.length} steps at ${fps} fps as ${frames.length} GIF frames, hold ${holdMs} ms, empty ${emptyMs} ms: ${values.out}`)
 }
 
-const appTimeline = ({ fps, holdMs }) => {
+const appTimeline = ({ fps, holdMs, emptyMs }) => {
   const frameMs = 1000 / fps
-  const holdFrames = Math.round(holdMs / frameMs)
-  const motionFrames = Math.round((CYCLE_MS - LEAVE_START_MS + SETTLED_MS) / frameMs)
-  const hold = Array.from({ length: holdFrames }, () => SETTLED_MS)
-  const motion = Array.from({ length: motionFrames }, (_, index) => (LEAVE_START_MS + index * frameMs) % CYCLE_MS)
-  return [...hold, ...motion]
+  const steps = ({ fromMs, durationMs }) => Array.from(
+    { length: Math.round(durationMs / frameMs) },
+    (_, index) => fromMs + index * frameMs
+  )
+  const hold = steps({ fromMs: SETTLED_MS, durationMs: holdMs }).map(() => SETTLED_MS)
+  const leave = steps({ fromMs: LEAVE_START_MS, durationMs: LEAVE_END_MS - LEAVE_START_MS + emptyMs })
+  const enter = steps({ fromMs: 0, durationMs: SETTLED_MS })
+  return [...hold, ...leave, ...enter]
 }
 
 const renderFrames = async (frameTimes) => {
