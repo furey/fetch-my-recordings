@@ -502,10 +502,20 @@ const quitAndTime = async ({ app, child, userData, quit }) => {
   const started = Date.now()
   await app.evaluate(quit)
   const quitting = await waitForQuitting({ userData, logStart, exited })
-  const ms = Date.now() - started
-  if (!quitting) return { outcome: 'running', ms }
-  const gone = await Promise.race([exited, new Promise(resolve => setTimeout(() => resolve(false), PROCESS_EXIT_MS))])
-  return { outcome: gone ? 'exited' : 'still running after Quitting.', ms }
+  if (!quitting) return { outcome: 'running', ms: Date.now() - started }
+  const gone = await raceTimeout({ promise: exited, ms: PROCESS_EXIT_MS, timeoutValue: false })
+  const outcome = gone ? 'exited' : 'still running after Quitting.'
+  return { outcome, ms: Date.now() - started }
+}
+
+const raceTimeout = async ({ promise, ms, timeoutValue }) => {
+  let timer = null
+  const timeout = new Promise(resolve => { timer = setTimeout(() => resolve(timeoutValue), ms) })
+  try {
+    return await Promise.race([promise, timeout])
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 const waitForQuitting = async ({ userData, logStart, exited }) => {
@@ -546,7 +556,7 @@ const assertQuitEndsSave = async ({ name, quit, quirks, env, during = async () =
     await during({ box, page })
     await answerCloseQuestion({ app, button: 'Stop and close' })
     const { outcome, ms } = await quitAndTime({ app, child, userData, quit })
-    assert.equal(outcome, 'exited', `the app was still running ${ms} ms after the quit`)
+    assert.equal(outcome, 'exited', `the app was still running ${ms} ms after the quit (${outcome})`)
     await assertResumableParts({ box, saveFolder })
   } finally {
     await stopIfRunning(child)
@@ -559,7 +569,7 @@ test('quit during save: app.quit asks first, then ends the save at once, and a l
   try {
     await answerCloseQuestion({ app, button: 'Stop and close' })
     const { outcome, ms } = await quitAndTime({ app, child, userData, quit: quitApp })
-    assert.equal(outcome, 'exited', `the app was still running ${ms} ms after app.quit()`)
+    assert.equal(outcome, 'exited', `the app was still running ${ms} ms after app.quit() (${outcome})`)
     await assertResumableParts({ box, saveFolder })
   } catch (error) {
     await stopIfRunning(child)
@@ -615,7 +625,7 @@ test('quit during save: Stop and close still closes when the save ends while the
     await app.evaluate(quitApp)
     await waitForFinish({ page, heading: 'All done', timeout: 30000 })
     const { outcome, ms } = await quitAndTime({ app, child, userData, quit: () => { setTimeout(() => globalThis.sendCloseAnswer(), 0) } })
-    assert.equal(outcome, 'exited', `the app was still running ${ms} ms after Stop and close`)
+    assert.equal(outcome, 'exited', `the app was still running ${ms} ms after Stop and close (${outcome})`)
   } finally {
     await stopIfRunning(child)
     await box.stop()
@@ -658,7 +668,7 @@ test('quit during save: quitting again while the question is open asks once, the
     await new Promise(resolve => setTimeout(resolve, 500))
     assert.equal(await closeQuestionCount(app), 1)
     const { outcome, ms } = await quitAndTime({ app, child, userData, quit: () => { setTimeout(() => globalThis.sendCloseAnswer(), 0) } })
-    assert.equal(outcome, 'exited', `the app was still running ${ms} ms after Stop and close`)
+    assert.equal(outcome, 'exited', `the app was still running ${ms} ms after Stop and close (${outcome})`)
   } finally {
     await stopIfRunning(child)
     await box.stop()
@@ -1269,7 +1279,7 @@ test('find your Fetch box: a background search that found nothing is redone, vis
     }
     await page.getByRole('heading', { name: 'Choose recordings' }).waitFor({ timeout: 20000 })
     await page.locator('#box-card').getByText(box.address).waitFor()
-    assertShownFor({ log: await screenLog(page), text: 'Looking for your Fetch box', ms: 800 })
+    assertShownFor({ log: await screenLog(page), text: 'Looking for your Fetch box | Searching your home network…', ms: 800 })
   } finally {
     await app.close()
     await silent.stop()
@@ -1431,6 +1441,7 @@ const recordScreens = (page) => page.evaluate(() => {
   window.screenObserver?.disconnect()
   const snapshot = () => [
     document.querySelector('#view h1')?.textContent ?? '',
+    document.getElementById('search-status')?.textContent ?? '',
     document.querySelector('.address-form button[type="submit"]')?.textContent ?? '',
     document.getElementById('folder-info')?.textContent ?? ''
   ].join(' | ')

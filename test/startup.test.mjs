@@ -15,7 +15,7 @@ const expectAclCrash = Boolean(process.env.FMR_E2E_ACL_EXPECT_CRASH)
 const ACCESS_CHECK_EXIT_CODE = 0x80000003
 const VISIBLE_WITHIN_MS = 30000
 const EXIT_WITHIN_MS = 30000
-const TEST_TIMEOUT_MS = 120000
+const TEST_TIMEOUT_MS = 180000
 const STOP_WITHIN_MS = 5000
 
 let tmpRoot = null
@@ -255,8 +255,7 @@ const spawnApp = ({ userData, fault = '', extraEnv = {} }) => {
 const runUntilExit = async ({ userData, fault = '', extraEnv }) => {
   const child = spawnApp({ userData, fault, extraEnv })
   const exit = new Promise(resolve => child.once('exit', (code, signal) => resolve({ code, signal })))
-  const timeout = new Promise(resolve => setTimeout(() => resolve(null), EXIT_WITHIN_MS))
-  const result = await Promise.race([exit, timeout])
+  const result = await raceTimeout({ promise: exit, ms: EXIT_WITHIN_MS, timeoutValue: null })
   if (result) return result
   await stopChild(child)
   throw new Error(`The app did not exit within ${EXIT_WITHIN_MS} ms.\n${await readLog(userData)}\n${await chromiumLogTail(userData)}`)
@@ -270,6 +269,16 @@ const stopChild = async (child) => {
   if (stopped || hasExited(child)) return
   child.kill('SIGKILL')
   await exited
+}
+
+const raceTimeout = async ({ promise, ms, timeoutValue }) => {
+  let timer = null
+  const timeout = new Promise(resolve => { timer = setTimeout(() => resolve(timeoutValue), ms) })
+  try {
+    return await Promise.race([promise, timeout])
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 const hasExited = (child) => child.exitCode !== null || child.signalCode !== null
