@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/app-icon.png" alt="Fetch My Recordings" width="128"/>
+  <img src="docs/img/app-icon-animated.gif" alt="Fetch My Recordings" width="128"/>
 </p>
 
 <h1 align="center">Fetch My Recordings</h1>
 
 <p align="center">
   <strong>Copy the recordings on your Fetch TV box to your computer.</strong><br/>
-  A free desktop app for Mac, Windows, and Linux. No Fetch account, no terminal.
+  A free desktop app for Mac, Windows, and Linux.
 </p>
 
 <p align="center">
