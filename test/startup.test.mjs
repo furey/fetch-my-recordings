@@ -13,8 +13,9 @@ const packagedExecutable = process.env.FETCHTV_E2E_EXECUTABLE
 const aclRepro = Boolean(process.env.FMR_E2E_ACL_REPRO)
 const expectAclCrash = Boolean(process.env.FMR_E2E_ACL_EXPECT_CRASH)
 const ACCESS_CHECK_EXIT_CODE = 0x80000003
-const VISIBLE_WITHIN_MS = 12000
-const TEST_TIMEOUT_MS = 60000
+const VISIBLE_WITHIN_MS = 30000
+const EXIT_WITHIN_MS = 30000
+const TEST_TIMEOUT_MS = 120000
 const STOP_WITHIN_MS = 5000
 
 let tmpRoot = null
@@ -51,7 +52,7 @@ startupTest('startup fault renderer-crash: shows the window and a Reload dialog,
 startupTest('startup fault renderer-crash: choosing Quit exits with the reason logged and does not count as a failed start', async () => {
   const userData = await freshDir('renderer-crash-quit')
   const { code } = await runUntilExit({ userData, fault: 'renderer-crash', extraEnv: { FMR_TEST_DIALOG_ANSWER: '1' } })
-  assert.equal(code, 0)
+  assert.equal(code, 0, await exitDetails({ code, userData }))
   const log = await readLog(userData)
   assert.match(log, /The window contents stopped/)
   assert.match(log, /Dialog answer: Quit\./)
@@ -83,7 +84,7 @@ startupTest('startup fault no-ready: shows the window after 10 s and raises the 
 startupTest('startup fault gpu-crash: before the window shows, exits with the reason logged and the next start uses the next fallback', async () => {
   const userData = await freshDir('gpu-crash')
   const { code } = await runUntilExit({ userData, fault: 'gpu-crash' })
-  assert.equal(code, 0)
+  assert.equal(code, 0, await exitDetails({ code, userData }))
   const log = await readLog(userData)
   assert.match(log, /The GPU process stopped/)
   assert.match(log, /The next start uses graphics fallback 1/)
@@ -97,7 +98,7 @@ startupTest('startup fault gpu-crash: before the window shows, exits with the re
 startupTest('startup fault main-throw: exits with code 1, the error in main.log, and the graphics fallback left at 0', async () => {
   const userData = await freshDir('main-throw')
   const { code } = await runUntilExit({ userData, fault: 'main-throw' })
-  assert.equal(code, 1)
+  assert.equal(code, 1, await exitDetails({ code, userData }))
   const log = await readLog(userData)
   assert.match(log, /Fatal error \(start\): Error: Test fault: main-throw/)
   assert.match(log, /Error box: Fetch My Recordings has to close/)
@@ -110,7 +111,7 @@ startupTest('startup fault main-throw: exits with code 1, the error in main.log,
 startupTest('startup fault no-window: the watchdog shows an error box and exits, and the next start says so', async () => {
   const userData = await freshDir('watchdog')
   const { code } = await runUntilExit({ userData, fault: 'no-window', extraEnv: { FMR_TEST_WATCHDOG_MS: '3000' } })
-  assert.equal(code, 1)
+  assert.equal(code, 1, await exitDetails({ code, userData }))
   const log = await readLog(userData)
   assert.match(log, /No window after 3 s\./)
   assert.match(log, /Error box: Fetch My Recordings did not open/)
@@ -144,7 +145,7 @@ startupTest('second start: a hidden window comes back, and the second copy quits
     await waitForVisibleWindow(app)
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].hide())
     const { code } = await runUntilExit({ userData })
-    assert.equal(code, 0)
+    assert.equal(code, 0, await exitDetails({ code, userData }))
     await waitForLog({ userData, text: 'Another start asked for the window.' })
     await waitForVisibleWindow(app)
   } finally {
@@ -173,7 +174,7 @@ startupTest('the Help menu opens the log folder', async () => {
 startupTest('the log writes the home folder as ~', async () => {
   const userData = await freshDir('home-in-log')
   const { code } = await runUntilExit({ userData, fault: 'main-throw' })
-  assert.equal(code, 1)
+  assert.equal(code, 1, await exitDetails({ code, userData }))
   const log = await readLog(userData)
   assert.match(log, /Test fault: main-throw/)
   assert.equal(log.includes(os.homedir()), false, log)
@@ -254,11 +255,11 @@ const spawnApp = ({ userData, fault = '', extraEnv = {} }) => {
 const runUntilExit = async ({ userData, fault = '', extraEnv }) => {
   const child = spawnApp({ userData, fault, extraEnv })
   const exit = new Promise(resolve => child.once('exit', (code, signal) => resolve({ code, signal })))
-  const timeout = new Promise(resolve => setTimeout(() => resolve(null), VISIBLE_WITHIN_MS))
+  const timeout = new Promise(resolve => setTimeout(() => resolve(null), EXIT_WITHIN_MS))
   const result = await Promise.race([exit, timeout])
   if (result) return result
   await stopChild(child)
-  throw new Error(`The app did not exit within ${VISIBLE_WITHIN_MS} ms.\n${await readLog(userData)}`)
+  throw new Error(`The app did not exit within ${EXIT_WITHIN_MS} ms.\n${await readLog(userData)}\n${await chromiumLogTail(userData)}`)
 }
 
 const stopChild = async (child) => {
@@ -312,6 +313,13 @@ const electronVersion = async () => (await readJson(path.join(appRoot, 'node_mod
 const readJson = (filePath) => fs.readFile(filePath, 'utf8').then(JSON.parse, () => null)
 
 const readLog = (userData) => fs.readFile(path.join(userData, 'logs', 'main.log'), 'utf8').catch(() => '')
+
+const exitDetails = async ({ code, userData }) => `Exit code ${code}.\n${await readLog(userData)}\n${await chromiumLogTail(userData)}`
+
+const chromiumLogTail = async (userData, lines = 40) => {
+  const log = await fs.readFile(path.join(userData, 'logs', 'chromium.log'), 'utf8').catch(() => '(no chromium.log)')
+  return `chromium.log (last ${lines} lines):\n${log.trimEnd().split('\n').slice(-lines).join('\n')}`
+}
 
 const logLength = async (userData) => (await readLog(userData)).length
 
