@@ -27,6 +27,7 @@ const SHOW_FALLBACK_MS = 10000
 const CHROMIUM_LOG_MAX_BYTES = 2 * 1024 * 1024
 const FAULTS_WITHOUT_READY = new Set(['no-ready', 'gpu-crash', 'renderer-crash'])
 const WATCHDOG_MS = 30000
+const TEST_ERROR_BOX_MS = 1000
 const ERR_ABORTED = -3
 const distDir = path.dirname(fileURLToPath(import.meta.url))
 const rendererPage = path.join(distDir, 'renderer', 'index.html')
@@ -210,7 +211,7 @@ const startWatchdog = () => {
       title: 'Fetch My Recordings did not open',
       content: `The window did not open within ${waitMs / 1000} seconds. Open the app again. It starts with safer graphics settings.\n\nIf it still does not open, start a thread at ${DISCUSSIONS_URL} and attach the log file:\n${state.log.filePath}`
     })
-    exitApp(1)
+    exitAfterErrorBox(1)
   }, waitMs)
   timer.unref?.()
 }
@@ -236,7 +237,12 @@ const failFatally = ({ error, origin }) => {
     title: 'Fetch My Recordings has to close',
     content: `Something went wrong: ${error?.message ?? error}\n\nIf it happens again, start a thread at ${DISCUSSIONS_URL} and attach the log file:\n${state.log.filePath}`
   })
-  exitApp(1)
+  exitAfterErrorBox(1)
+}
+
+const exitAfterErrorBox = (code) => {
+  if (!isTestRun()) return exitApp(code)
+  setTimeout(() => exitApp(code), TEST_ERROR_BOX_MS)
 }
 
 const exitApp = (code) => {
