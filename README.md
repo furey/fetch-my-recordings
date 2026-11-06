@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/img/app-icon-animated.gif" alt="Fetch My Recordings" width="128"/>
+  <img src="https://github.com/furey/fetch-my-recordings/releases/download/docs-media/app-icon-animated.gif" alt="Fetch My Recordings" width="128"/>
 </p>
 
 <h1 align="center">Fetch My Recordings</h1>
