@@ -14,8 +14,6 @@
   <img alt="Downloads" src="https://img.shields.io/github/downloads/furey/fetch-my-recordings/total.svg?style=flat-square&color=3ba4ff"/>
   <img alt="Mac, Windows, Linux" src="https://img.shields.io/badge/runs%20on-Mac%20%7C%20Windows%20%7C%20Linux-3ba4ff.svg?style=flat-square"/>
   <img alt="License: GPL-3.0-or-later" src="https://img.shields.io/badge/license-GPL--3.0--or--later-f28c28.svg?style=flat-square"/>
-  <img alt="Home network only" src="https://img.shields.io/badge/network-home%20only-8d9aa7.svg?style=flat-square"/>
-  <img alt="Last commit" src="https://img.shields.io/github/last-commit/furey/fetch-my-recordings.svg?style=flat-square&color=f5c542"/>
 </p>
 
 <p align="center">
