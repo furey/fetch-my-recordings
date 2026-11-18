@@ -20,7 +20,8 @@
   <a href="https://furey.github.io/freetvarr/guide/leaving-fetch#save-via-desktop-app"><strong>Download for your computer →</strong></a>
 </p>
 
-Prefer a terminal, a NAS, or Docker? See [Related projects](#related-projects).
+> [!TIP]<br>
+> Prefer a terminal, a NAS, or Docker? See [Related projects](#related-projects).
 
 <https://github.com/user-attachments/assets/9ecbf007-1c77-4009-842c-13fce198e09b>
 
