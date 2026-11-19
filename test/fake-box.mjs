@@ -95,6 +95,8 @@ export const startFakeBox = async ({
   rootFolders = ['Recordings', 'Live TV'],
   failingBrowses = [],
   browseDelayMs = 0,
+  childCounts = true,
+  totalMatches = true,
   cancelled = false
 } = {}) => {
   const catalogue = buildCatalogue(cancelled ? [] : shows)
@@ -102,6 +104,7 @@ export const startFakeBox = async ({
   const attempts = new Map()
   const forgotten = new Set()
   const browses = { waiting: 0 }
+  const silences = { count: 0 }
   const mediaServerXml = cancelled
     ? (await fs.readFile(path.join(fixturesDir, 'cancelled-media-server.xml'), 'utf8')).replace(/<friendlyName>[^<]*<\/friendlyName>/, `<friendlyName>STB ${escapeXml(host)}</friendlyName>`)
     : (await fs.readFile(mediaServerFixture, 'utf8')).replace('Fetch TV Test Box', escapeXml(name))
@@ -115,14 +118,14 @@ export const startFakeBox = async ({
     }
     if (req.method === 'GET' && req.url === '/MediaServer.xml') return sendXml(res, mediaServerXml)
     if (req.method === 'POST' && req.url === '/web/cds_control' && cancelled) return answerCancelledBrowse({ req, res, cancelledBrowse })
-    if (req.method === 'POST' && req.url === '/upnp/control/ContentDirectory') return answerBrowseAfter({ delayMs: browseDelayMs, browses, answer: () => answerBrowse({ req, res, catalogue, baseUrl: baseUrlOf(), rootFolders, failingBrowses, forgotten }) })
+    if (req.method === 'POST' && req.url === '/upnp/control/ContentDirectory') return answerBrowseAfter({ delayMs: browseDelayMs, browses, answer: () => answerBrowse({ req, res, catalogue, baseUrl: baseUrlOf(), rootFolders, failingBrowses, forgotten, childCounts, totalMatches }) })
     const itemMatch = req.url.match(/^\/item\/(\d+)$/)
     if (itemMatch && (req.method === 'GET' || req.method === 'HEAD')) {
       const item = catalogue.items.get(itemMatch[1])
       if (!item || item.missing) return notFound(res)
       const attempt = (attempts.get(item.id) ?? 0) + 1
       attempts.set(item.id, attempt)
-      return sendRecording({ req, res, item, quirks: { ...DEFAULT_QUIRKS, ...quirks, ...item.quirks }, attempt, bytesPerSecond })
+      return sendRecording({ req, res, item, quirks: { ...DEFAULT_QUIRKS, ...quirks, ...item.quirks }, attempt, bytesPerSecond, silences })
     }
     notFound(res)
   })
@@ -139,6 +142,7 @@ export const startFakeBox = async ({
     port: actualPort,
     requests,
     browses,
+    silences,
     catalogue,
     forgetShow: (title) => forgotten.add(catalogue.showFolders.find(show => show.title === title).id),
     powerOff: () => {
@@ -197,15 +201,16 @@ const answerBrowseAfter = async ({ delayMs, browses, answer }) => {
   }
 }
 
-const answerBrowse = async ({ req, res, catalogue, baseUrl, rootFolders, failingBrowses, forgotten }) => {
-  const objectId = objectIdOf(await readBody(req))
+const answerBrowse = async ({ req, res, catalogue, baseUrl, rootFolders, failingBrowses, forgotten, childCounts, totalMatches }) => {
+  const body = await readBody(req)
+  const objectId = objectIdOf(body)
   if (failingBrowses.includes(objectId)) {
     res.writeHead(500)
     return res.end()
   }
-  const didl = forgotten.has(objectId) ? null : didlFor({ objectId, catalogue, baseUrl, rootFolders })
+  const didl = forgotten.has(objectId) ? null : didlFor({ objectId, catalogue, baseUrl, rootFolders, childCounts, requestedCount: requestedCountOf(body) })
   if (!didl) return sendNoSuchObject(res)
-  sendXml(res, browseEnvelope(didl.xml, didl.count))
+  sendXml(res, browseEnvelope({ ...didl, total: totalMatches ? didl.total : null }))
 }
 
 const readCancelledBrowse = async () => {
@@ -223,6 +228,8 @@ const answerCancelledBrowse = async ({ req, res, cancelledBrowse }) => {
 
 const objectIdOf = (body) => body.match(/<ObjectID>([^<]*)<\/ObjectID>/)?.[1] ?? '0'
 
+const requestedCountOf = (body) => Number(body.match(/<RequestedCount>(\d+)<\/RequestedCount>/)?.[1] ?? 0)
+
 const sendNoSuchObject = async (res) => {
   res.writeHead(500, { 'Content-Type': 'text/xml; charset="utf-8"' })
   res.end(await fs.readFile(path.join(fixturesDir, 'upnp-error-501.xml'), 'utf8'))
@@ -230,21 +237,33 @@ const sendNoSuchObject = async (res) => {
 
 const ROOT_FOLDER_IDS = { Recordings: '1', 'Live TV': '2' }
 
-const didlFor = ({ objectId, catalogue, baseUrl, rootFolders }) => {
+const didlFor = ({ objectId, catalogue, baseUrl, rootFolders, childCounts, requestedCount }) => {
+  const childCountFor = (size) => {
+    if (typeof childCounts === 'number') return childCounts
+    return childCounts ? size : null
+  }
   if (objectId === '0') {
-    return { count: rootFolders.length, xml: rootFolders.map(title => container({ id: ROOT_FOLDER_IDS[title] ?? title, parentId: '0', title })).join('') }
+    const sizeOf = (title) => (title === 'Recordings' ? catalogue.showFolders.length : 0)
+    return pageOf({ requestedCount, entries: rootFolders.map(title => container({ id: ROOT_FOLDER_IDS[title] ?? title, parentId: '0', title, childCount: childCountFor(sizeOf(title)) })) })
   }
   if (objectId === '1') {
-    return { count: catalogue.showFolders.length, xml: catalogue.showFolders.map(show => container({ id: show.id, parentId: '1', title: show.title })).join('') }
+    return pageOf({ requestedCount, entries: catalogue.showFolders.map(show => container({ id: show.id, parentId: '1', title: show.title, childCount: childCountFor(show.items.length) })) })
   }
-  if (rootFolders.some(title => (ROOT_FOLDER_IDS[title] ?? title) === objectId)) return { count: 0, xml: '' }
+  if (rootFolders.some(title => (ROOT_FOLDER_IDS[title] ?? title) === objectId)) return pageOf({ requestedCount, entries: [] })
   const show = catalogue.showFolders.find(folder => folder.id === objectId)
   if (!show) return null
-  return { count: show.items.length, xml: show.items.map(item => itemXml({ item, baseUrl })).join('') }
+  return pageOf({ requestedCount, entries: show.items.map(item => itemXml({ item, baseUrl })) })
 }
 
-const container = ({ id, parentId, title }) =>
-  `<container id="${id}" parentID="${parentId}" restricted="1"><dc:title>${escapeXml(title)}</dc:title><upnp:class>object.container</upnp:class></container>`
+const pageOf = ({ requestedCount, entries }) => {
+  const returned = requestedCount > 0 ? entries.slice(0, requestedCount) : entries
+  return { xml: returned.join(''), returned: returned.length, total: entries.length }
+}
+
+const container = ({ id, parentId, title, childCount = null }) => {
+  const childCountAttribute = childCount === null ? '' : ` childCount="${childCount}"`
+  return `<container id="${id}" parentID="${parentId}"${childCountAttribute} restricted="1"><dc:title>${escapeXml(title)}</dc:title><upnp:class>object.container</upnp:class></container>`
+}
 
 const itemXml = ({ item, baseUrl }) => {
   const listedSize = listedSizeOf(item)
@@ -263,19 +282,18 @@ const listedSizeOf = (item) => {
 
 const RECORDING_MARKER_SIZE = 4398046510080
 
-const browseEnvelope = (didlXml, count) => `<?xml version="1.0" encoding="utf-8"?>
+const browseEnvelope = ({ xml: didlXml, returned, total }) => `<?xml version="1.0" encoding="utf-8"?>
 <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
   <s:Body>
     <u:BrowseResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1">
       <Result>${escapeXml(`<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/">${didlXml}</DIDL-Lite>`)}</Result>
-      <NumberReturned>${count}</NumberReturned>
-      <TotalMatches>${count}</TotalMatches>
-      <UpdateID>1</UpdateID>
+      <NumberReturned>${returned}</NumberReturned>
+${total === null ? '' : `      <TotalMatches>${total}</TotalMatches>\n`}      <UpdateID>1</UpdateID>
     </u:BrowseResponse>
   </s:Body>
 </s:Envelope>`
 
-const sendRecording = ({ req, res, item, quirks, attempt, bytesPerSecond }) => {
+const sendRecording = ({ req, res, item, quirks, attempt, bytesPerSecond, silences }) => {
   const statedSize = item.actualSize + (quirks.overstate ?? 0)
   const start = rangeStartOf(req.headers.range)
   if (item.actualSize <= 0) return sendRecordingInProgress({ res, item, attempt })
@@ -294,7 +312,7 @@ const sendRecording = ({ req, res, item, quirks, attempt, bytesPerSecond }) => {
   res.writeHead(start === null ? 200 : 206, headers)
   if (req.method === 'HEAD') return res.end()
   const dropAt = quirks.alwaysDropAt || (attempt === 1 ? quirks.dropFirstAttemptAt : 0)
-  if (quirks.goSilentAt) return streamBytes({ res, item, from, end: Math.max(from, quirks.goSilentAt), bytesPerSecond, finish: () => {} })
+  if (quirks.goSilentAt) return streamBytes({ res, item, from, end: Math.max(from, quirks.goSilentAt), bytesPerSecond, finish: () => { silences.count += 1 } })
   const end = dropAt > from ? Math.min(dropAt, item.actualSize) : item.actualSize
   streamBytes({ res, item, from, end, bytesPerSecond, finish: () => (end < item.actualSize || quirks.resetAtEnd ? resetConnection(res) : res.end()) })
 }
@@ -439,9 +457,11 @@ const rangeStartOf = (header) => {
 
 const readBody = (req) => new Promise((resolve, reject) => {
   let body = ''
+  if (req.destroyed) return resolve(body)
   req.setEncoding('utf8')
   req.on('data', chunk => { body += chunk })
   req.on('end', () => resolve(body))
+  req.on('close', () => resolve(body))
   req.on('error', reject)
 })
 

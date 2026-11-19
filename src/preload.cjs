@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('fetchtv', {
   appInfo: invoke('app:info'),
   findBoxes: invoke('boxes:find'),
   connectToBox: invoke('boxes:connect'),
+  countRecordings: invoke('boxes:count'),
   listRecordings: invoke('recordings:list'),
   onListProgress: subscribe('recordings:progress'),
   chooseFolder: invoke('folder:choose'),

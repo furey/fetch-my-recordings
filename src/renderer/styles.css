@@ -956,6 +956,15 @@ body.is-hidden .progress.is-busy > span {
   .choice:hover { background: var(--surface-1); }
 }
 
+.choice .row-side {
+  padding: 0 0 0 8px;
+  font-size: 15px;
+}
+
+.choice .row-side.is-quiet {
+  color: var(--text-3);
+}
+
 .folder {
   display: flex;
   align-items: center;
