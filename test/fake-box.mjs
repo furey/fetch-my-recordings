@@ -102,6 +102,7 @@ export const startFakeBox = async ({
   const attempts = new Map()
   const forgotten = new Set()
   const browses = { waiting: 0 }
+  const silences = { count: 0 }
   const mediaServerXml = cancelled
     ? (await fs.readFile(path.join(fixturesDir, 'cancelled-media-server.xml'), 'utf8')).replace(/<friendlyName>[^<]*<\/friendlyName>/, `<friendlyName>STB ${escapeXml(host)}</friendlyName>`)
     : (await fs.readFile(mediaServerFixture, 'utf8')).replace('Fetch TV Test Box', escapeXml(name))
@@ -122,7 +123,7 @@ export const startFakeBox = async ({
       if (!item || item.missing) return notFound(res)
       const attempt = (attempts.get(item.id) ?? 0) + 1
       attempts.set(item.id, attempt)
-      return sendRecording({ req, res, item, quirks: { ...DEFAULT_QUIRKS, ...quirks, ...item.quirks }, attempt, bytesPerSecond })
+      return sendRecording({ req, res, item, quirks: { ...DEFAULT_QUIRKS, ...quirks, ...item.quirks }, attempt, bytesPerSecond, silences })
     }
     notFound(res)
   })
@@ -139,6 +140,7 @@ export const startFakeBox = async ({
     port: actualPort,
     requests,
     browses,
+    silences,
     catalogue,
     forgetShow: (title) => forgotten.add(catalogue.showFolders.find(show => show.title === title).id),
     powerOff: () => {
@@ -275,7 +277,7 @@ const browseEnvelope = (didlXml, count) => `<?xml version="1.0" encoding="utf-8"
   </s:Body>
 </s:Envelope>`
 
-const sendRecording = ({ req, res, item, quirks, attempt, bytesPerSecond }) => {
+const sendRecording = ({ req, res, item, quirks, attempt, bytesPerSecond, silences }) => {
   const statedSize = item.actualSize + (quirks.overstate ?? 0)
   const start = rangeStartOf(req.headers.range)
   if (item.actualSize <= 0) return sendRecordingInProgress({ res, item, attempt })
@@ -294,7 +296,7 @@ const sendRecording = ({ req, res, item, quirks, attempt, bytesPerSecond }) => {
   res.writeHead(start === null ? 200 : 206, headers)
   if (req.method === 'HEAD') return res.end()
   const dropAt = quirks.alwaysDropAt || (attempt === 1 ? quirks.dropFirstAttemptAt : 0)
-  if (quirks.goSilentAt) return streamBytes({ res, item, from, end: Math.max(from, quirks.goSilentAt), bytesPerSecond, finish: () => {} })
+  if (quirks.goSilentAt) return streamBytes({ res, item, from, end: Math.max(from, quirks.goSilentAt), bytesPerSecond, finish: () => { silences.count += 1 } })
   const end = dropAt > from ? Math.min(dropAt, item.actualSize) : item.actualSize
   streamBytes({ res, item, from, end, bytesPerSecond, finish: () => (end < item.actualSize || quirks.resetAtEnd ? resetConnection(res) : res.end()) })
 }
