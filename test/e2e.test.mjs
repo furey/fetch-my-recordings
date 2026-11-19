@@ -1141,7 +1141,7 @@ test('the window is locked down: isolated, sandboxed, no Node in the page, stric
     }))
     assert.equal(pageGlobals.require, 'undefined')
     assert.equal(pageGlobals.process, 'undefined')
-    assert.ok(pageGlobals.api.every(name => typeof name === 'string') && pageGlobals.api.length === 18)
+    assert.ok(pageGlobals.api.every(name => typeof name === 'string') && pageGlobals.api.length === 19)
     const inlineScriptRan = await page.evaluate(() => new Promise(resolve => {
       window.inlineRan = false
       const script = document.createElement('script')

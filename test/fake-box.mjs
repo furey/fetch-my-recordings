@@ -454,9 +454,11 @@ const rangeStartOf = (header) => {
 
 const readBody = (req) => new Promise((resolve, reject) => {
   let body = ''
+  if (req.destroyed) return resolve(body)
   req.setEncoding('utf8')
   req.on('data', chunk => { body += chunk })
   req.on('end', () => resolve(body))
+  req.on('close', () => resolve(body))
   req.on('error', reject)
 })
 
