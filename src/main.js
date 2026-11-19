@@ -469,6 +469,7 @@ const registerIpc = ({ settings, history }) => {
   }))
 
   handle('boxes:find', async ({ wholeNetwork }) => {
+    cancelCounts()
     const { lastAddress } = await settings.read()
     const locations = await findBoxes({
       rememberedAddress: lastAddress,

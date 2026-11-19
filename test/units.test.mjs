@@ -111,6 +111,12 @@ test('count: without childCount, reads TotalMatches from one short Browse per sh
   assert.equal(posts, 2 + demoShows().length)
 })
 
+test('count: a negative childCount is ignored and each show is counted instead', async () => {
+  const { count, posts } = await countOnFakeBox({ childCounts: -1 })
+  assert.equal(count, DEMO_RECORDINGS)
+  assert.equal(posts, 2 + demoShows().length)
+})
+
 test('count: without childCount or TotalMatches, counts the items of each show', async () => {
   const { count, posts } = await countOnFakeBox({ childCounts: false, totalMatches: false })
   assert.equal(count, DEMO_RECORDINGS)

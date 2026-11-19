@@ -238,7 +238,10 @@ const sendNoSuchObject = async (res) => {
 const ROOT_FOLDER_IDS = { Recordings: '1', 'Live TV': '2' }
 
 const didlFor = ({ objectId, catalogue, baseUrl, rootFolders, childCounts, requestedCount }) => {
-  const childCountFor = (size) => (childCounts ? size : null)
+  const childCountFor = (size) => {
+    if (typeof childCounts === 'number') return childCounts
+    return childCounts ? size : null
+  }
   if (objectId === '0') {
     const sizeOf = (title) => (title === 'Recordings' ? catalogue.showFolders.length : 0)
     return pageOf({ requestedCount, entries: rootFolders.map(title => container({ id: ROOT_FOLDER_IDS[title] ?? title, parentId: '0', title, childCount: childCountFor(sizeOf(title)) })) })

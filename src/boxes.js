@@ -55,12 +55,15 @@ const boxKeyOf = (location) => {
 export const countRecordings = async ({ location, budgetMs = COUNT_BUDGET_MS, signal }) => {
   const apiService = await getApiService(location)
   if (!apiService) return null
-  const budget = AbortSignal.timeout(budgetMs)
-  const browse = browserFor({ apiService, signal: signal ? AbortSignal.any([signal, budget]) : budget })
+  const stop = new AbortController()
+  const signals = [AbortSignal.timeout(budgetMs), stop.signal, signal].filter(Boolean)
+  const browse = browserFor({ apiService, signal: AbortSignal.any(signals) })
   try {
     return await countWith(browse)
   } catch {
     return null
+  } finally {
+    stop.abort()
   }
 }
 
@@ -71,7 +74,7 @@ const countWith = async (browse) => {
   if (childCountOf(recordings) === 0) return 0
   const shows = containersOf(await browse({ objectId: idOf(recordings) }))
   const childCounts = shows.map(childCountOf)
-  if (childCounts.every(Number.isInteger)) return sum(childCounts)
+  if (childCounts.every(isChildCount)) return sum(childCounts)
   const showCounts = await mapWithConcurrency({
     values: shows,
     limit: SHOW_COUNT_CONCURRENCY,
@@ -121,6 +124,8 @@ const listOf = (value) => [value].flat().filter(Boolean)
 const idOf = (node) => String(node['@_id'])
 
 const childCountOf = (node) => node['@_childCount']
+
+const isChildCount = (value) => Number.isInteger(value) && value >= 0
 
 const sum = (numbers) => numbers.reduce((total, number) => total + number, 0)
 

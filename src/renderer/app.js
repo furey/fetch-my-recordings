@@ -345,7 +345,9 @@ const showBoxCount = async ({ box, side }) => {
   if (known?.result) return fillBoxCount({ side, result: known.result })
   fillBoxCount({ side, result: null })
   const result = await withMinimumDuration((known ?? countBox(box)).promise)
-  if (side.isConnected && result.error !== 'cancelled') fillBoxCount({ side, result })
+  if (!side.isConnected) return
+  if (result.error === 'cancelled') return showBoxCount({ box, side })
+  fillBoxCount({ side, result })
 }
 
 const countBox = (box) => {
