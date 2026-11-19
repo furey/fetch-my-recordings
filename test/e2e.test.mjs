@@ -599,7 +599,7 @@ test('quit during save: quitting while the box is silent mid-stream ends the sav
     name: 'quit-silent',
     quit: quitApp,
     quirks: { goSilentAt: 4 * MB },
-    during: ({ page }) => page.waitForTimeout(3000)
+    during: ({ box }) => waitUntil(() => box.silences.count > 0, 30000)
   }))
 
 test('quit during save: quitting while waiting for the box ends the save at once', () =>
@@ -676,22 +676,23 @@ test('quit during save: quitting again while the question is open asks once, the
 })
 
 test('quit during save: after Keep saving cancels a quit, a window that fails to load still offers a reload', async () => {
-  const { box, app, child, userData } = await startQuitSave({ name: 'quit-keep-reload' })
+  const { box, app, child, page, userData } = await startQuitSave({ name: 'quit-keep-reload' })
   try {
     await app.evaluate(({ dialog }) => {
       dialog.showMessageBox = async (...args) => ({ response: Math.max(0, args.at(-1).buttons.indexOf('Keep saving')) })
     })
     const kept = await quitAndTime({ app, child, userData, quit: quitApp })
-    assert.equal(kept.outcome, 'running')
+    assert.equal(kept.outcome, 'running', `Keep saving did not keep the app open (${kept.outcome} after ${kept.ms} ms)\n${await mainLogTail(userData)}`)
     await app.evaluate(({ BrowserWindow }) => {
       BrowserWindow.getAllWindows()[0].webContents.loadURL('file:///fmr-missing-page.html').catch(() => null)
     })
     const deadline = Date.now() + 10000
     while (!/Reloading the window\./.test(await readMainLog(userData)) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 200))
     assert.match(await readMainLog(userData), /The window did not load: .*\n.*Reloading the window\./s)
+    await page.getByRole('heading', { name: 'Fetch My Recordings' }).waitFor({ timeout: 30000 })
     await answerCloseQuestion({ app, button: 'Stop and close' })
     const closed = await quitAndTime({ app, child, userData, quit: quitApp })
-    assert.equal(closed.outcome, 'exited')
+    assert.equal(closed.outcome, 'exited', `the app was still running ${closed.ms} ms after Stop and close (${closed.outcome})\n${await mainLogTail(userData)}`)
   } finally {
     await stopIfRunning(child)
     await box.stop()
@@ -824,6 +825,8 @@ test('a box that fails every show request asks for a restart, not an empty list'
 })
 
 const readMainLog = (userData) => fs.readFile(path.join(userData, 'logs', 'main.log'), 'utf8').catch(() => '')
+
+const mainLogTail = async (userData) => `main.log (last 20 lines):\n${(await readMainLog(userData)).split('\n').slice(-20).join('\n')}`
 
 test('saved recordings: still there is unticked, moved or deleted is ticked with the reason, new is ticked', async () => {
   const box = await startFakeBox({ shows: [demoShows()[0]] })
