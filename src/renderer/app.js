@@ -9,6 +9,7 @@ const state = {
   background: null,
   folderCheck: 0,
   boxes: [],
+  boxCounts: new Map(),
   box: null,
   shows: [],
   selected: new Set(),
@@ -76,6 +77,7 @@ const begin = () => {
 }
 
 const searchForBoxes = async ({ autoPick, wholeNetwork = false }) => {
+  state.boxCounts = new Map()
   const visit = showScreen(1, searchingScreen())
   const boxes = await withMinimumDuration(findBoxesWithRetry({ wholeNetwork }))
   if (!isCurrentVisit(visit)) return
@@ -318,19 +320,60 @@ const notFoundInfo = () => openInfo({
 
 const boxesToChoose = () => [...new Map([...state.boxes, state.box].filter(Boolean).map(box => [box.id, box])).values()]
 
-const chooseBoxScreen = () => ({
-  content: [
-    h('h1', {}, boxesToChoose().length > 1 ? 'Choose your Fetch box' : 'Fetch box found'),
-    h('ul', { className: 'table' }, ...boxesToChoose().map(box => h('li', { className: 'row' },
-      h('button', { type: 'button', className: 'choice', onclick: () => chooseBox(box) },
-        h('span', { className: 'box-dot' }),
-        h('span', { className: 'row-text' },
-          h('span', { className: 'row-title' }, box.name),
-          h('span', { className: 'row-detail mono' }, box.address)))))),
-    h('p', {}, h('button', { type: 'button', className: 'link', onclick: () => searchForBoxes({ autoPick: false, wholeNetwork: true }) }, 'Search again')),
-    addressForm()
-  ]
-})
+const chooseBoxScreen = () => {
+  const boxes = boxesToChoose()
+  const sides = new Map(boxes.map(box => [box.id, h('span', { className: 'row-side' })]))
+  return {
+    content: [
+      h('h1', {}, boxes.length > 1 ? 'Choose your Fetch box' : 'Fetch box found'),
+      h('ul', { className: 'table' }, ...boxes.map(box => h('li', { className: 'row' },
+        h('button', { type: 'button', className: 'choice', onclick: () => chooseBox(box) },
+          h('span', { className: 'box-dot' }),
+          h('span', { className: 'row-text' },
+            h('span', { className: 'row-title' }, box.name),
+            h('span', { className: 'row-detail mono' }, box.address)),
+          sides.get(box.id))))),
+      h('p', {}, h('button', { type: 'button', className: 'link', onclick: () => searchForBoxes({ autoPick: false, wholeNetwork: true }) }, 'Search again')),
+      addressForm()
+    ],
+    after: () => boxes.forEach(box => showBoxCount({ box, side: sides.get(box.id) }))
+  }
+}
+
+const showBoxCount = async ({ box, side }) => {
+  const known = state.boxCounts.get(box.id)
+  if (known?.result) return fillBoxCount({ side, result: known.result })
+  fillBoxCount({ side, result: null })
+  const result = await withMinimumDuration((known ?? countBox(box)).promise)
+  if (side.isConnected && result.error !== 'cancelled') fillBoxCount({ side, result })
+}
+
+const countBox = (box) => {
+  const counts = state.boxCounts
+  const entry = { result: null }
+  entry.promise = api.countRecordings({ boxId: box.id })
+    .catch(() => ({ count: null }))
+    .then((result) => {
+      if (result.error === 'cancelled') counts.delete(box.id)
+      else entry.result = result
+      return result
+    })
+  counts.set(box.id, entry)
+  return entry
+}
+
+const fillBoxCount = ({ side, result }) => {
+  const isCount = Number.isInteger(result?.count)
+  side.textContent = boxCountText(result)
+  side.classList.toggle('is-quiet', !isCount)
+}
+
+const boxCountText = (result) => {
+  if (!result) return 'Counting recordings…'
+  if (!Number.isInteger(result.count)) return 'Count unavailable'
+  if (result.count === 0) return 'No recordings'
+  return plural(result.count, 'recording')
+}
 
 const addressForm = () => {
   const input = h('input', {

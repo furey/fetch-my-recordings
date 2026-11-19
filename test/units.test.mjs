@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseBoxAddress, describeBox, findBoxes } from '../src/boxes.js'
+import { parseBoxAddress, describeBox, findBoxes, connectToAddress, countRecordings } from '../src/boxes.js'
 import { FETCH_MANUFACTURER_URL, MEDIA_SERVER_TARGET, parseSearchResponse, searchForFetchBoxes } from '../src/discovery.js'
 import { plainReason, summariseResults } from '../src/saving.js'
 import { describeFolder } from '../src/folders.js'
@@ -9,6 +9,7 @@ import { createInstallAccessRecord, previousStartFailedAccessCheck } from '../sr
 import { createLaunchGuard } from '../src/launch-guard.js'
 import { createSettings } from '../src/settings.js'
 import { createHistory } from '../src/history.js'
+import { demoShows, startFakeBox } from './fake-box.mjs'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -83,6 +84,64 @@ test('find: a remembered box that answers skips the network search', async () =>
   assert.equal(searches.length, 1)
   assert.deepEqual(await findBoxes({ rememberedAddress: '192.168.1.50', wholeNetwork: true, connect: async () => box, search }), [box])
   assert.equal(searches.length, 2)
+})
+
+const countOnFakeBox = async (options, { budgetMs, signal } = {}) => {
+  const box = await startFakeBox(options)
+  try {
+    const location = await connectToAddress(box.address)
+    const startedAt = Date.now()
+    const count = await countRecordings({ location, budgetMs, signal })
+    const posts = box.requests.filter(request => request.method === 'POST').length
+    return { count, posts, ms: Date.now() - startedAt }
+  } finally {
+    await box.stop()
+  }
+}
+
+const DEMO_RECORDINGS = demoShows().flatMap(show => show.items).length
+
+test('count: sums the childCount of each show folder in two Browse requests', async () => {
+  assert.deepEqual(await countOnFakeBox({}).then(({ count, posts }) => ({ count, posts })), { count: DEMO_RECORDINGS, posts: 2 })
+})
+
+test('count: without childCount, reads TotalMatches from one short Browse per show', async () => {
+  const { count, posts } = await countOnFakeBox({ childCounts: false })
+  assert.equal(count, DEMO_RECORDINGS)
+  assert.equal(posts, 2 + demoShows().length)
+})
+
+test('count: without childCount or TotalMatches, counts the items of each show', async () => {
+  const { count, posts } = await countOnFakeBox({ childCounts: false, totalMatches: false })
+  assert.equal(count, DEMO_RECORDINGS)
+  assert.equal(posts, 2 + demoShows().length * 2)
+})
+
+test('count: a Recordings folder with childCount 0 counts as no recordings after one Browse', async () => {
+  const { count, posts } = await countOnFakeBox({ cancelled: true })
+  assert.equal(count, 0)
+  assert.equal(posts, 1)
+})
+
+test('count: no Recordings folder, an HTTP error, or a failed show Browse is unavailable', async () => {
+  assert.equal((await countOnFakeBox({ rootFolders: ['Live TV'] })).count, null)
+  assert.equal((await countOnFakeBox({ failingBrowses: ['0'] })).count, null)
+  assert.equal((await countOnFakeBox({ childCounts: false, failingBrowses: ['101'] })).count, null)
+})
+
+test('count: a box slower than the budget is unavailable, with no retry', async () => {
+  const { count, posts, ms } = await countOnFakeBox({ browseDelayMs: 3000 }, { budgetMs: 100 })
+  assert.equal(count, null)
+  assert.equal(posts, 1)
+  assert.ok(ms < 2000, `the count took ${ms} ms`)
+})
+
+test('count: an aborted count stops at once', async () => {
+  const controller = new AbortController()
+  controller.abort()
+  const { count, ms } = await countOnFakeBox({ browseDelayMs: 3000 }, { signal: controller.signal })
+  assert.equal(count, null)
+  assert.ok(ms < 2000, `the count took ${ms} ms`)
 })
 
 test('search: keeps only media server answers that give a location', () => {

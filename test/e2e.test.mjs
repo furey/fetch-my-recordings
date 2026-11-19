@@ -50,6 +50,8 @@ test('first run: no box found, type the address, choose episodes, save in the de
 
     await page.getByRole('button', { name: 'Change', exact: true }).click()
     await page.getByRole('heading', { name: 'Fetch box found' }).waitFor({ timeout: 20000 })
+    await page.locator('.choice .row-side', { hasText: 'Counting recordings…' }).waitFor()
+    await page.locator('.choice .row-side', { hasText: '11 recordings' }).waitFor()
     await capture({ app, page, name: '1-choose-box' })
     await page.getByRole('button', { name: /Test Fetch Box/ }).click()
     await page.getByRole('heading', { name: 'Choose recordings' }).waitFor()

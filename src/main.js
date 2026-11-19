@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { syncCleanupLockFiles } from 'fetchtv'
-import { connectToAddress, describeBox, findBoxes, parseBoxAddress } from './boxes.js'
+import { connectToAddress, countRecordings, describeBox, findBoxes, parseBoxAddress } from './boxes.js'
 import { describeFolder } from './folders.js'
 import { describeListing, listingProblemFor, listRecordings, pickEpisodes } from './recordings.js'
 import { startSave } from './saving.js'
@@ -36,6 +36,7 @@ const rendererUrl = pathToFileURL(rendererPage).href
 const state = {
   window: null,
   boxes: new Map(),
+  counts: new Set(),
   shows: [],
   summaries: [],
   listingRequest: 0,
@@ -484,9 +485,24 @@ const registerIpc = ({ settings, history }) => {
     return { box: rememberBox(location) }
   })
 
+  handle('boxes:count', async ({ boxId }) => {
+    const location = state.boxes.get(boxId)
+    if (!location) return { error: 'unknown-box' }
+    const controller = new AbortController()
+    state.counts.add(controller)
+    try {
+      const count = await countRecordings({ location, signal: controller.signal })
+      if (controller.signal.aborted) return { error: 'cancelled' }
+      return { count }
+    } finally {
+      state.counts.delete(controller)
+    }
+  })
+
   handle('recordings:list', async ({ boxId }) => {
     const location = state.boxes.get(boxId)
     if (!location) return { error: 'unknown-box' }
+    cancelCounts()
     const request = ++state.listingRequest
     const isLatestRequest = () => request === state.listingRequest
     const onProgress = (progress) => { if (isLatestRequest()) send('recordings:progress', progress) }
@@ -646,6 +662,11 @@ const stopActiveSave = async () => {
   if (!save) return
   save.cancel()
   await save.done.catch(() => null)
+}
+
+const cancelCounts = () => {
+  state.counts.forEach(controller => controller.abort())
+  state.counts.clear()
 }
 
 const handle = (channel, handler) => {
