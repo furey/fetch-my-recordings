@@ -50,6 +50,8 @@ test('first run: no box found, type the address, choose episodes, save in the de
 
     await page.getByRole('button', { name: 'Change', exact: true }).click()
     await page.getByRole('heading', { name: 'Fetch box found' }).waitFor({ timeout: 20000 })
+    await page.locator('.choice .row-side', { hasText: 'Counting recordings…' }).waitFor()
+    await page.locator('.choice .row-side', { hasText: '11 recordings' }).waitFor()
     await capture({ app, page, name: '1-choose-box' })
     await page.getByRole('button', { name: /Test Fetch Box/ }).click()
     await page.getByRole('heading', { name: 'Choose recordings' }).waitFor()
@@ -1139,7 +1141,7 @@ test('the window is locked down: isolated, sandboxed, no Node in the page, stric
     }))
     assert.equal(pageGlobals.require, 'undefined')
     assert.equal(pageGlobals.process, 'undefined')
-    assert.ok(pageGlobals.api.every(name => typeof name === 'string') && pageGlobals.api.length === 18)
+    assert.ok(pageGlobals.api.every(name => typeof name === 'string') && pageGlobals.api.length === 19)
     const inlineScriptRan = await page.evaluate(() => new Promise(resolve => {
       window.inlineRan = false
       const script = document.createElement('script')
