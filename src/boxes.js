@@ -94,40 +94,78 @@ const countShow = async ({ browse, objectId }) => {
 const browseAll = async ({ browse, objectId }) => {
   const seen = new Set()
   const entries = { containers: [], items: [] }
-  let received = 0
-  let total = null
-  let isPastTotal = false
-  for (let page = 1; page <= MAX_BROWSE_PAGES; page++) {
-    const isBeyondTotal = page > 1 && (isPastTotal || total === null || seen.size >= total)
-    const reply = await browsePageOrEnd({ browse, objectId, startingIndex: received, isFirstProbe: isBeyondTotal && !isPastTotal })
-    if (!reply) break
-    const replyEntries = { containers: listOf(reply.didl.container), items: listOf(reply.didl.item) }
-    const replyCount = replyEntries.containers.length + replyEntries.items.length
-    const added = addUnseen({ seen, entries, replyEntries })
-    received += replyCount
-    if (Number.isInteger(reply.totalMatches) && reply.totalMatches > 0) total = reply.totalMatches
-    if (isBeyondTotal && added > 0) isPastTotal = true
-    if (replyCount === 0 || added === 0) break
-  }
+  const reads = { count: 1 }
+  const take = (reply) => addUnseen({ seen, entries, replyEntries: replyEntriesOf(reply) })
+  const first = await browse({ objectId, startingIndex: 0 })
+  const firstCount = countOf(first)
+  if (take(first) === 0) return entries
+  const total = totalOf(first)
+  const isShortOfTotal = total !== null && total > firstCount
+  if (isShortOfTotal) await readUpToTotal({ browse, objectId, pageSize: firstCount, total, take, reads })
+  await readPastTotal({ browse, objectId, from: isShortOfTotal ? total : firstCount, take, reads })
   return entries
 }
 
-const browsePageOrEnd = async ({ browse, objectId, startingIndex, isFirstProbe }) => {
+const readUpToTotal = async ({ browse, objectId, pageSize, total, take, reads }) => {
+  const starts = []
+  for (let start = pageSize; start < total; start += pageSize) starts.push(start)
+  await mapWithConcurrency({
+    values: starts,
+    limit: COUNT_PAGE_CONCURRENCY,
+    work: start => readSegment({ browse, objectId, start, end: Math.min(start + pageSize, total), take, reads })
+  })
+}
+
+const readSegment = async ({ browse, objectId, start, end, take, reads }) => {
+  let offset = start
+  while (offset < end && reads.count < MAX_BROWSE_PAGES) {
+    reads.count++
+    const reply = await browse({ objectId, startingIndex: offset })
+    const count = countOf(reply)
+    take(reply)
+    if (count === 0) return
+    offset += count
+  }
+}
+
+const readPastTotal = async ({ browse, objectId, from, take, reads }) => {
+  let offset = from
+  let isProbe = true
+  while (reads.count < MAX_BROWSE_PAGES) {
+    reads.count++
+    const reply = isProbe ? await probePastTotal({ browse, objectId, startingIndex: offset }) : await browse({ objectId, startingIndex: offset })
+    if (!reply) return
+    const count = countOf(reply)
+    if (count === 0 || take(reply) === 0) return
+    offset += count
+    isProbe = false
+  }
+}
+
+const probePastTotal = async ({ browse, objectId, startingIndex }) => {
   try {
-    return await browse({ objectId, startingIndex })
+    return await browse({ objectId, startingIndex, timeoutMs: PROBE_TIMEOUT_MS })
   } catch (error) {
-    if (isFirstProbe && isErrorReply(error)) return null
+    if (isErrorReply(error) || isTimeout(error)) return null
     throw error
   }
 }
 
+const replyEntriesOf = (reply) => ({ containers: listOf(reply.didl.container), items: listOf(reply.didl.item) })
+
+const countOf = (reply) => listOf(reply.didl.container).length + listOf(reply.didl.item).length
+
+const totalOf = (reply) => (Number.isInteger(reply.totalMatches) && reply.totalMatches > 0 ? reply.totalMatches : null)
+
 const isErrorReply = (error) => Boolean(error.response) || error.message === NO_DIDL_MESSAGE
+
+const isTimeout = (error) => error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT'
 
 const addUnseen = ({ seen, entries, replyEntries }) => {
   let added = 0
   for (const kind of ['containers', 'items']) {
     for (const node of replyEntries[kind]) {
-      const key = node['@_id'] === undefined ? `${kind}:no-id:${JSON.stringify(node)}` : `${kind}:${node['@_id']}`
+      const key = entryKeyOf({ kind, node })
       if (seen.has(key)) continue
       seen.add(key)
       entries[kind].push(node)
@@ -137,11 +175,17 @@ const addUnseen = ({ seen, entries, replyEntries }) => {
   return added
 }
 
-const browserFor = ({ apiService, signal }) => async ({ objectId, startingIndex = 0, requestedCount = 0 }) => {
+const entryKeyOf = ({ kind, node }) => {
+  const id = node['@_id']
+  return id === undefined || id === '' ? `${kind}:no-id:${JSON.stringify(node)}` : `${kind}:${id}`
+}
+
+const browserFor = ({ apiService, signal }) => async ({ objectId, startingIndex = 0, requestedCount = 0, timeoutMs = 0 }) => {
   const { cd_ctr: controlUrl, cd_service: serviceType } = apiService
   const response = await httpClient.post(controlUrl, browsePayload({ serviceType, objectId, startingIndex, requestedCount }), {
     headers: { 'Content-Type': 'text/xmlcharset="utf-8"', 'SOAPAction': `"${serviceType}#Browse"` },
-    signal
+    signal,
+    timeout: timeoutMs
   })
   const reply = findNode({ obj: parseXml(response.data), path: 'Envelope.Body.BrowseResponse' })
   const result = findNode({ obj: reply, path: 'Result' })
@@ -189,6 +233,8 @@ const mapWithConcurrency = async ({ values, limit, work }) => {
 
 const COUNT_BUDGET_MS = 5000
 const MAX_BROWSE_PAGES = 200
+const COUNT_PAGE_CONCURRENCY = 3
+const PROBE_TIMEOUT_MS = 1500
 const NO_DIDL_MESSAGE = 'The box sent a Browse reply with no DIDL-Lite result'
 const SHOW_COUNT_CONCURRENCY = 4
 const CONNECT_TIMEOUT_MS = 8000

@@ -751,9 +751,13 @@ test('a box that caps each Browse reply lists every show, and a show it cannot f
     assert.equal(await page.locator('li.show-row').count(), shows.length)
     await page.locator('#list-incomplete', { hasText: 'Some recordings could not be read from the box.' }).waitFor()
     assert.match(await readMainLog(userData), /partial\. These folders could not be read in full: Four Corners\./)
-    await page.getByRole('button', { name: 'Try again' }).click()
-    await page.getByRole('heading', { name: 'Choose recordings' }).waitFor({ timeout: 60000 })
-    await page.locator('#list-incomplete').waitFor()
+    assert.match(await readMainLog(userData), /Read folder "Four Corners" \(ObjectID 100\): .*partial: yes\./)
+    const listingsBefore = (await readMainLog(userData)).match(/Listed recordings from box/g).length
+    await page.locator('#list-again').click()
+    await page.getByRole('heading', { name: 'Reading your recordings' }).waitFor()
+    await page.locator('#list-incomplete').waitFor({ timeout: 60000 })
+    const listingsAfter = (await readMainLog(userData)).match(/Listed recordings from box/g).length
+    assert.equal(listingsAfter, listingsBefore + 1)
   } finally {
     await app.close()
     await box.stop()

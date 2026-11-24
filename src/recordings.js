@@ -1,9 +1,9 @@
 import { getFetchRecordings, isCurrentlyRecording, sortRecordingsByTitle } from 'fetchtv'
 
-export const listRecordings = async ({ location, onProgress, signal }) => {
+export const listRecordings = async ({ location, onProgress, onFolderRead = () => {}, signal }) => {
   let outcome = { outcome: 'ok' }
   const onOutcome = (reported) => { outcome = reported }
-  const shows = sortRecordingsByTitle(await getFetchRecordings({ location, filters: {}, onProgress, onOutcome, signal }))
+  const shows = sortRecordingsByTitle(await getFetchRecordings({ location, filters: {}, onProgress, onOutcome, onFolderRead, signal }))
   const summaries = await Promise.all(shows.map(summariseShow))
   return { shows, summaries, outcome }
 }
@@ -23,6 +23,15 @@ export const describeListing = ({ address, outcome, error, folders }) => [
   error ? `Error: ${error}.` : '',
   folders ? `${outcome === 'partial' ? 'These folders could not be read in full' : 'The box listed these folders'}: ${folders.length > 0 ? folders.join(', ') : 'none'}.` : ''
 ].filter(Boolean).join(' ')
+
+export const describeFolderRead = ({ title, objectId, reads, totalMatches, unique, probe, isPartial, isRestarted }) => [
+  `Read folder "${title}" (ObjectID ${objectId}):`,
+  `${reads} ${reads === 1 ? 'read' : 'reads'},`,
+  `TotalMatches ${totalMatches ?? 'none'},`,
+  `${unique} unique entries,`,
+  `read past the end: ${probe},`,
+  `partial: ${isPartial ? 'yes' : 'no'}${isRestarted ? ', restarted after the box changed it' : ''}.`
+].join(' ')
 
 export const pickEpisodes = ({ shows, episodeIds }) => {
   const wanted = new Set(episodeIds.map(String))

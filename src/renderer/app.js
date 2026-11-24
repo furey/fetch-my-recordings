@@ -120,11 +120,13 @@ const chooseBox = (box) => {
   useBox(box)
 }
 
-const useBox = async (box, { thenSave = null } = {}) => {
+const useBox = async (box, { thenSave = null, keepSelection = false } = {}) => {
+  const previous = keepSelection ? { selected: state.selected, listed: new Set(savableEpisodes(state.shows).map(episode => episode.id)) } : null
+  const previousOpen = keepSelection ? state.open : new Set()
   state.box = box
   state.shows = []
   state.selected = new Set()
-  state.open = new Set()
+  state.open = previousOpen
   state.listIsStale = false
   state.listIncomplete = false
   const visit = showScreen(2, loadingListScreen())
@@ -139,7 +141,7 @@ const useBox = async (box, { thenSave = null } = {}) => {
   state.shows = result.shows
   state.listIncomplete = Boolean(result.incomplete)
   if (thenSave) return saveSameRecordings(thenSave)
-  state.selected = new Set(savableEpisodes(state.shows).filter(isWanted).map(episode => episode.id))
+  state.selected = new Set(savableEpisodes(state.shows).filter(episode => isSelectedAfterListing({ episode, previous })).map(episode => episode.id))
   showScreen(2, state.shows.length === 0 ? emptyListScreen() : recordingsScreen())
 }
 
@@ -527,7 +529,7 @@ const recordingsScreen = () => {
 
 const incompleteListNotice = () => {
   if (!state.listIncomplete) return []
-  const retry = h('button', { type: 'button', className: 'btn quiet', id: 'list-again', onclick: () => useBox(state.box) }, 'Try again')
+  const retry = h('button', { type: 'button', className: 'btn quiet', id: 'list-again', onclick: () => useBox(state.box, { keepSelection: true }) }, 'Try again')
   return [h('div', { className: 'notice', role: 'alert', id: 'list-incomplete' }, h('span', {}, 'Some recordings could not be read from the box.'), retry)]
 }
 
@@ -711,6 +713,11 @@ const lastParts = (filePath, count) => filePath.split(/[\\/]/).filter(Boolean).s
 const savedStateOf = (episode) => episode.saved?.state ?? 'new'
 
 const isWanted = (episode) => savedStateOf(episode) !== 'saved'
+
+const isSelectedAfterListing = ({ episode, previous }) => {
+  if (previous?.listed.has(episode.id)) return previous.selected.has(episode.id)
+  return isWanted(episode)
+}
 
 const toggleDrawer = ({ show, drawer, main, reveal }) => {
   const isOpen = state.open.has(show.id)

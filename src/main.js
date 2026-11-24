@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { syncCleanupLockFiles } from 'fetchtv'
 import { connectToAddress, countRecordings, describeBox, findBoxes, parseBoxAddress } from './boxes.js'
 import { describeFolder } from './folders.js'
-import { describeListing, listingProblemFor, listRecordings, pickEpisodes } from './recordings.js'
+import { describeFolderRead, describeListing, listingProblemFor, listRecordings, pickEpisodes } from './recordings.js'
 import { startSave } from './saving.js'
 import { createSettings } from './settings.js'
 import { createHistory, savedStates } from './history.js'
@@ -513,7 +513,8 @@ const registerIpc = ({ settings, history }) => {
     state.listing = listing
     try {
       const address = new URL(location.url).hostname
-      const { shows, summaries, outcome } = await listRecordings({ location, onProgress, signal: listing.signal })
+      const onFolderRead = (folder) => state.log.write(describeFolderRead(folder))
+      const { shows, summaries, outcome } = await listRecordings({ location, onProgress, onFolderRead, signal: listing.signal })
       state.log.write(describeListing({ address, ...outcome }))
       if (!isLatestRequest()) return { error: 'superseded' }
       const problem = listingProblemFor(outcome.outcome)

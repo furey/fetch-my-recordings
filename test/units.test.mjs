@@ -4,7 +4,7 @@ import { parseBoxAddress, describeBox, findBoxes, connectToAddress, countRecordi
 import { FETCH_MANUFACTURER_URL, MEDIA_SERVER_TARGET, parseSearchResponse, searchForFetchBoxes } from '../src/discovery.js'
 import { plainReason, summariseResults } from '../src/saving.js'
 import { describeFolder } from '../src/folders.js'
-import { describeListing, listRecordings, listingProblemFor } from '../src/recordings.js'
+import { describeFolderRead, describeListing, listRecordings, listingProblemFor } from '../src/recordings.js'
 import { createInstallAccessRecord, previousStartFailedAccessCheck } from '../src/install-access.js'
 import { createLaunchGuard } from '../src/launch-guard.js'
 import { createSettings } from '../src/settings.js'
@@ -151,9 +151,43 @@ test('count: an error reply to the read past the end of the show list keeps the 
   assert.equal(count, CAPPED_RECORDINGS)
 })
 
+test('count: a capped box of 210 shows at 80 ms per reply counts every show inside the budget', async () => {
+  const shows = Array.from({ length: 210 }, (_, index) => ({ title: `Show ${index}`, items: [{ title: 'S1 E1 - Episode', size: 4096, duration: '0:30:00' }] }))
+  const { count, ms } = await countOnFakeBox({ shows, browseCap: (objectId) => (objectId === '1' ? 3 : 24), browseDelayMs: 80 })
+  assert.equal(count, 210)
+  assert.ok(ms < 4000, `the count took ${ms} ms`)
+})
+
+test('count: a box that never answers a read past the end still counts, after a short probe wait', async () => {
+  const { count, ms } = await countOnFakeBox({ shows: CAPPED_LIBRARY, browseCap: capLikeTheReport, hangsPastEnd: true })
+  assert.equal(count, CAPPED_RECORDINGS)
+  assert.ok(ms < 4500, `the count took ${ms} ms`)
+})
+
+test('count: entries with an empty id are told apart by their content', async () => {
+  const { count } = await countOnFakeBox({ shows: [FOUR_CORNERS], browseCap: 24, childCounts: false, totalMatches: false, emptyItemIds: true })
+  assert.equal(count, 45)
+})
+
 test('count: a capped box whose TotalMatches equals each reply still counts all 45', async () => {
   const { count } = await countOnFakeBox({ shows: [FOUR_CORNERS], browseCap: 24, childCounts: false, totalMatches: 'page' })
   assert.equal(count, 45)
+})
+
+test('listing: each folder read is reported for the log with its reads, total, entries, and probe result', async () => {
+  const box = await startFakeBox({ shows: CAPPED_LIBRARY, browseCap: capLikeTheReport })
+  const original = console.log
+  console.log = () => {}
+  try {
+    const location = await connectToAddress(box.address)
+    const lines = []
+    await listRecordings({ location, onProgress: () => {}, onFolderRead: (folder) => lines.push(describeFolderRead(folder)) })
+    assert.equal(lines.length, 2 + CAPPED_LIBRARY.length)
+    assert.ok(lines.includes('Read folder "Four Corners" (ObjectID 100): 3 reads, TotalMatches 45, 45 unique entries, read past the end: empty, partial: no.'), lines.join('\n'))
+  } finally {
+    console.log = original
+    await box.stop()
+  }
 })
 
 test('listing: a later page that fails keeps the recordings read and reports a partial listing', async () => {
@@ -177,16 +211,14 @@ test('listing: a later page that fails keeps the recordings read and reports a p
 })
 
 test('listing: a cancelled listing stops asking the box for pages', async () => {
-  const box = await startFakeBox({ shows: CAPPED_LIBRARY, browseCap: capLikeTheReport })
+  const controller = new AbortController()
+  const onBrowse = ({ objectId }) => { if (objectId === '105') controller.abort() }
+  const box = await startFakeBox({ shows: CAPPED_LIBRARY, browseCap: capLikeTheReport, onBrowse })
   const original = console.log
   console.log = () => {}
   try {
     const location = await connectToAddress(box.address)
-    const controller = new AbortController()
-    const listing = listRecordings({ location, onProgress: () => {}, signal: controller.signal })
-    await new Promise(resolve => setTimeout(resolve, 30))
-    controller.abort()
-    const { shows, outcome } = await listing
+    const { shows, outcome } = await listRecordings({ location, onProgress: () => {}, signal: controller.signal })
     const postsAtCancel = box.requests.filter(request => request.method === 'POST').length
     await new Promise(resolve => setTimeout(resolve, 200))
     assert.equal(outcome.outcome, 'cancelled')
