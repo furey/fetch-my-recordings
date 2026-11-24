@@ -146,6 +146,11 @@ test('count: a capped box without childCount or TotalMatches pages each show to 
   assert.equal(count, 45)
 })
 
+test('count: an error reply to the read past the end of the show list keeps the count', async () => {
+  const { count } = await countOnFakeBox({ shows: CAPPED_LIBRARY, browseCap: capLikeTheReport, failingPagesFrom: { 1: CAPPED_LIBRARY.length } })
+  assert.equal(count, CAPPED_RECORDINGS)
+})
+
 test('count: a capped box whose TotalMatches equals each reply still counts all 45', async () => {
   const { count } = await countOnFakeBox({ shows: [FOUR_CORNERS], browseCap: 24, childCounts: false, totalMatches: 'page' })
   assert.equal(count, 45)

@@ -96,28 +96,32 @@ const browseAll = async ({ browse, objectId }) => {
   const entries = { containers: [], items: [] }
   let received = 0
   let total = null
+  let isPastTotal = false
   for (let page = 1; page <= MAX_BROWSE_PAGES; page++) {
-    const isProbe = page > 1 && (total === null || seen.size >= total)
-    const reply = await browsePageOrEnd({ browse, objectId, startingIndex: received, isProbe })
+    const isBeyondTotal = page > 1 && (isPastTotal || total === null || seen.size >= total)
+    const reply = await browsePageOrEnd({ browse, objectId, startingIndex: received, isFirstProbe: isBeyondTotal && !isPastTotal })
     if (!reply) break
     const replyEntries = { containers: listOf(reply.didl.container), items: listOf(reply.didl.item) }
     const replyCount = replyEntries.containers.length + replyEntries.items.length
     const added = addUnseen({ seen, entries, replyEntries })
     received += replyCount
     if (Number.isInteger(reply.totalMatches) && reply.totalMatches > 0) total = reply.totalMatches
+    if (isBeyondTotal && added > 0) isPastTotal = true
     if (replyCount === 0 || added === 0) break
   }
   return entries
 }
 
-const browsePageOrEnd = async ({ browse, objectId, startingIndex, isProbe }) => {
+const browsePageOrEnd = async ({ browse, objectId, startingIndex, isFirstProbe }) => {
   try {
     return await browse({ objectId, startingIndex })
   } catch (error) {
-    if (isProbe && error.name !== 'AbortError' && error.name !== 'CanceledError') return null
+    if (isFirstProbe && isErrorReply(error)) return null
     throw error
   }
 }
+
+const isErrorReply = (error) => Boolean(error.response) || error.message === NO_DIDL_MESSAGE
 
 const addUnseen = ({ seen, entries, replyEntries }) => {
   let added = 0
@@ -142,7 +146,7 @@ const browserFor = ({ apiService, signal }) => async ({ objectId, startingIndex 
   const reply = findNode({ obj: parseXml(response.data), path: 'Envelope.Body.BrowseResponse' })
   const result = findNode({ obj: reply, path: 'Result' })
   const didl = typeof result === 'string' ? parseXml(result)?.['DIDL-Lite'] : undefined
-  if (didl === undefined) throw new Error('The box sent a Browse reply with no DIDL-Lite result')
+  if (didl === undefined) throw new Error(NO_DIDL_MESSAGE)
   return { didl: didl || {}, totalMatches: findNode({ obj: reply, path: 'TotalMatches' }) }
 }
 
@@ -185,6 +189,7 @@ const mapWithConcurrency = async ({ values, limit, work }) => {
 
 const COUNT_BUDGET_MS = 5000
 const MAX_BROWSE_PAGES = 200
+const NO_DIDL_MESSAGE = 'The box sent a Browse reply with no DIDL-Lite result'
 const SHOW_COUNT_CONCURRENCY = 4
 const CONNECT_TIMEOUT_MS = 8000
 const REMEMBERED_TIMEOUT_MS = 2500
