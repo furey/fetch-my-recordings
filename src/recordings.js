@@ -1,9 +1,9 @@
 import { getFetchRecordings, isCurrentlyRecording, sortRecordingsByTitle } from 'fetchtv'
 
-export const listRecordings = async ({ location, onProgress }) => {
+export const listRecordings = async ({ location, onProgress, onFolderRead = () => {}, signal }) => {
   let outcome = { outcome: 'ok' }
   const onOutcome = (reported) => { outcome = reported }
-  const shows = sortRecordingsByTitle(await getFetchRecordings({ location, filters: {}, onProgress, onOutcome }))
+  const shows = sortRecordingsByTitle(await getFetchRecordings({ location, filters: {}, onProgress, onOutcome, onFolderRead, signal }))
   const summaries = await Promise.all(shows.map(summariseShow))
   return { shows, summaries, outcome }
 }
@@ -21,8 +21,24 @@ const LISTING_PROBLEMS = {
 export const describeListing = ({ address, outcome, error, folders }) => [
   `Listed recordings from box ${address}: ${outcome}.`,
   error ? `Error: ${error}.` : '',
-  folders ? `The box listed these folders: ${folders.length > 0 ? folders.join(', ') : 'none'}.` : ''
+  folders ? `${outcome === 'partial' ? 'These folders could not be read in full' : 'The box listed these folders'}: ${folders.length > 0 ? folders.join(', ') : 'none'}.` : ''
 ].filter(Boolean).join(' ')
+
+export const describeFolderRead = (folder) => (folder.isFailed ? describeFailedFolder(folder) : describeReadFolder(folder))
+
+const describeFailedFolder = ({ title, objectId, reads }) =>
+  `Read folder "${title}" (ObjectID ${objectId}): failed after ${readsText(reads)}.`
+
+const describeReadFolder = ({ title, objectId, reads, totalMatches, unique, probe, isPartial, isRestarted }) => [
+  `Read folder "${title}" (ObjectID ${objectId}):`,
+  `${readsText(reads)},`,
+  `TotalMatches ${totalMatches ?? 'none'},`,
+  `${unique} unique entries,`,
+  `read past the end: ${probe},`,
+  `partial: ${isPartial ? 'yes' : 'no'}${isRestarted ? ', restarted after the box changed it' : ''}.`
+].join(' ')
+
+const readsText = (reads) => `${reads} ${reads === 1 ? 'read' : 'reads'}`
 
 export const pickEpisodes = ({ shows, episodeIds }) => {
   const wanted = new Set(episodeIds.map(String))

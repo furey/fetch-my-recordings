@@ -729,7 +729,35 @@ test('a show the box answers error 501 for is left out of the list, quickly', as
     assert.ok(Date.now() - startedAt < 5000, 'the list took longer than 5 s')
     await page.locator('li.show-row[data-show="Master Cook"]').waitFor()
     assert.equal(await page.locator('li.show-row[data-show="Jurassic Car Park"]').count(), 0)
-    assert.equal(box.requests.filter(request => request.method === 'POST').length, 2 + box.catalogue.showFolders.length, 'a show browse was retried')
+    const foldersRead = 2 + box.catalogue.showFolders.length - 1
+    assert.equal(box.requests.filter(request => request.method === 'POST').length, foldersRead * 2 + 1, 'a show browse was retried')
+  } finally {
+    await app.close()
+    await box.stop()
+  }
+})
+
+test('a box that caps each Browse reply lists every show, and a show it cannot finish shows a try-again notice', async () => {
+  const fourCorners = { title: 'Four Corners', items: Array.from({ length: 45 }, (_, index) => ({ title: `S1 E${index + 1} - Episode`, size: 4096, duration: '0:45:00' })) }
+  const shows = [fourCorners, ...bigLibrary({ size: 4096 })]
+  const capLikeTheReport = (objectId) => (objectId === '1' ? 3 : 24)
+  const box = await startFakeBox({ shows, browseCap: capLikeTheReport, failingPagesFrom: { 100: 24 } })
+  const userData = await freshDir('user-data-capped')
+  await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify({ lastAddress: box.address }))
+  const app = await launchApp({ userData })
+  try {
+    const page = await openApp(app)
+    await page.getByRole('heading', { name: 'Choose recordings' }).waitFor({ timeout: 60000 })
+    assert.equal(await page.locator('li.show-row').count(), shows.length)
+    await page.locator('#list-incomplete', { hasText: 'Some recordings could not be read from the box.' }).waitFor()
+    assert.match(await readMainLog(userData), /partial\. These folders could not be read in full: Four Corners\./)
+    assert.match(await readMainLog(userData), /Read folder "Four Corners" \(ObjectID 100\): .*partial: yes\./)
+    const listingsBefore = (await readMainLog(userData)).match(/Listed recordings from box/g).length
+    await page.locator('#list-again').click()
+    await page.getByRole('heading', { name: 'Reading your recordings' }).waitFor()
+    await page.locator('#list-incomplete').waitFor({ timeout: 60000 })
+    const listingsAfter = (await readMainLog(userData)).match(/Listed recordings from box/g).length
+    assert.equal(listingsAfter, listingsBefore + 1)
   } finally {
     await app.close()
     await box.stop()
@@ -1379,10 +1407,13 @@ test('change box: a slow list from the first box that arrives late does not repl
     await page.getByRole('heading', { name: 'Reading your recordings' }).waitFor()
     await page.getByRole('button', { name: 'Change', exact: true }).click()
     await page.getByLabel('Or type its IP address').fill(quickBox.address)
+    assert.ok(slowBox.browses.waiting > 0, 'the slow box finished its list before the quick box was chosen')
     await page.getByRole('button', { name: 'Connect' }).click()
     await page.getByRole('heading', { name: 'Choose recordings' }).waitFor()
-    assert.ok(slowBox.browses.waiting > 0, 'the slow box finished its list before the quick box was chosen')
+    const slowBrowses = () => slowBox.requests.filter(request => request.method === 'POST').length
+    const slowBrowsesAtSwitch = slowBrowses()
     await waitUntilQuietFor({ condition: () => slowBox.browses.waiting === 0, ms: 2500, timeoutMs: 30000 })
+    assert.equal(slowBrowses(), slowBrowsesAtSwitch, 'the slow box list kept reading after the quick box was chosen')
     assert.equal(await page.locator('li.show-row[data-show="Quick Show"]').count(), 1)
     await page.getByRole('button', { name: 'Next' }).click()
     await page.getByRole('button', { name: 'Save', exact: true }).click()

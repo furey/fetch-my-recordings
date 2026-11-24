@@ -22,7 +22,8 @@ const state = {
   saving: false,
   saveRun: null,
   leavingForStart: false,
-  listIsStale: false
+  listIsStale: false,
+  listIncomplete: false
 }
 
 const MINIMUM_BUSY_MS = 900
@@ -114,17 +115,20 @@ const takeBackgroundSearch = () => {
 }
 
 const chooseBox = (box) => {
-  const hasCurrentList = state.box?.id === box.id && state.shows.length > 0 && !state.listIsStale
+  const hasCurrentList = state.box?.id === box.id && state.shows.length > 0 && !state.listIsStale && !state.listIncomplete
   if (hasCurrentList) return showScreen(2, recordingsScreen())
   useBox(box)
 }
 
-const useBox = async (box, { thenSave = null } = {}) => {
+const useBox = async (box, { thenSave = null, keepSelection = false } = {}) => {
+  const previous = keepSelection ? { selected: state.selected, listed: new Set(savableEpisodes(state.shows).map(episode => episode.id)) } : null
+  const previousOpen = keepSelection ? state.open : new Set()
   state.box = box
   state.shows = []
   state.selected = new Set()
-  state.open = new Set()
+  state.open = previousOpen
   state.listIsStale = false
+  state.listIncomplete = false
   const visit = showScreen(2, loadingListScreen())
   const result = await withMinimumDuration(api.listRecordings({ boxId: box.id }))
   if (!isCurrentVisit(visit)) return
@@ -135,8 +139,9 @@ const useBox = async (box, { thenSave = null } = {}) => {
   if (result.problem === 'no-answer') return showScreen(2, boxDidNotAnswerScreen())
   if (result.problem === 'not-sharing') return showScreen(2, notSharingScreen())
   state.shows = result.shows
+  state.listIncomplete = Boolean(result.incomplete)
   if (thenSave) return saveSameRecordings(thenSave)
-  state.selected = new Set(savableEpisodes(state.shows).filter(isWanted).map(episode => episode.id))
+  state.selected = new Set(savableEpisodes(state.shows).filter(episode => isSelectedAfterListing({ episode, previous })).map(episode => episode.id))
   showScreen(2, state.shows.length === 0 ? emptyListScreen() : recordingsScreen())
 }
 
@@ -510,6 +515,7 @@ const recordingsScreen = () => {
       boxCard(),
       h('h1', {}, 'Choose recordings'),
       h('p', { className: 'meta', id: 'saved-summary' }, savedSummaryLine()),
+      ...incompleteListNotice(),
       h('div', { className: 'toolbar' }, h('div', { className: 'segmented', role: 'group', 'aria-label': 'Selection' }, allButton, noneButton)),
       h('ul', { className: 'table', id: 'show-list' }, ...rows.map(row => row.element))
     ],
@@ -519,6 +525,12 @@ const recordingsScreen = () => {
       next
     ]
   }
+}
+
+const incompleteListNotice = () => {
+  if (!state.listIncomplete) return []
+  const retry = h('button', { type: 'button', className: 'btn quiet', id: 'list-again', onclick: () => useBox(state.box, { keepSelection: true }) }, 'Try again')
+  return [h('div', { className: 'notice', role: 'alert', id: 'list-incomplete' }, h('span', {}, 'Some recordings could not be read from the box.'), retry)]
 }
 
 const savedSummaryLine = () => {
@@ -701,6 +713,11 @@ const lastParts = (filePath, count) => filePath.split(/[\\/]/).filter(Boolean).s
 const savedStateOf = (episode) => episode.saved?.state ?? 'new'
 
 const isWanted = (episode) => savedStateOf(episode) !== 'saved'
+
+const isSelectedAfterListing = ({ episode, previous }) => {
+  if (previous?.listed.has(episode.id)) return previous.selected.has(episode.id)
+  return isWanted(episode)
+}
 
 const toggleDrawer = ({ show, drawer, main, reveal }) => {
   const isOpen = state.open.has(show.id)
