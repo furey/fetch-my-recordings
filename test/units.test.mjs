@@ -184,6 +184,7 @@ test('listing: each folder read is reported for the log with its reads, total, e
     await listRecordings({ location, onProgress: () => {}, onFolderRead: (folder) => lines.push(describeFolderRead(folder)) })
     assert.equal(lines.length, 2 + CAPPED_LIBRARY.length)
     assert.ok(lines.includes('Read folder "Four Corners" (ObjectID 100): 3 reads, TotalMatches 45, 45 unique entries, read past the end: empty, partial: no.'), lines.join('\n'))
+    assert.equal(describeFolderRead({ title: 'Bluey', objectId: '101', reads: 1, isFailed: true }), 'Read folder "Bluey" (ObjectID 101): failed after 1 read.')
   } finally {
     console.log = original
     await box.stop()

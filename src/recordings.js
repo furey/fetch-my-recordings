@@ -24,14 +24,21 @@ export const describeListing = ({ address, outcome, error, folders }) => [
   folders ? `${outcome === 'partial' ? 'These folders could not be read in full' : 'The box listed these folders'}: ${folders.length > 0 ? folders.join(', ') : 'none'}.` : ''
 ].filter(Boolean).join(' ')
 
-export const describeFolderRead = ({ title, objectId, reads, totalMatches, unique, probe, isPartial, isRestarted }) => [
+export const describeFolderRead = (folder) => (folder.isFailed ? describeFailedFolder(folder) : describeReadFolder(folder))
+
+const describeFailedFolder = ({ title, objectId, reads }) =>
+  `Read folder "${title}" (ObjectID ${objectId}): failed after ${readsText(reads)}.`
+
+const describeReadFolder = ({ title, objectId, reads, totalMatches, unique, probe, isPartial, isRestarted }) => [
   `Read folder "${title}" (ObjectID ${objectId}):`,
-  `${reads} ${reads === 1 ? 'read' : 'reads'},`,
+  `${readsText(reads)},`,
   `TotalMatches ${totalMatches ?? 'none'},`,
   `${unique} unique entries,`,
   `read past the end: ${probe},`,
   `partial: ${isPartial ? 'yes' : 'no'}${isRestarted ? ', restarted after the box changed it' : ''}.`
 ].join(' ')
+
+const readsText = (reads) => `${reads} ${reads === 1 ? 'read' : 'reads'}`
 
 export const pickEpisodes = ({ shows, episodeIds }) => {
   const wanted = new Set(episodeIds.map(String))
