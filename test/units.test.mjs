@@ -10,6 +10,7 @@ import { createLaunchGuard } from '../src/launch-guard.js'
 import { createSettings } from '../src/settings.js'
 import { createHistory } from '../src/history.js'
 import { bigLibrary, demoShows, startFakeBox } from './fake-box.mjs'
+import { testInternals } from 'fetchtv'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -101,26 +102,28 @@ const countOnFakeBox = async (options, { budgetMs, signal } = {}) => {
 
 const DEMO_RECORDINGS = demoShows().flatMap(show => show.items).length
 
-test('count: sums the childCount of each show folder in two Browse requests', async () => {
-  assert.deepEqual(await countOnFakeBox({}).then(({ count, posts }) => ({ count, posts })), { count: DEMO_RECORDINGS, posts: 2 })
+const SINGLE_RECORDING_SHOWS = demoShows().filter(show => show.items.length === 1).length
+
+test('count: sums the childCount of each show folder, with one probe read past the end of each folder', async () => {
+  assert.deepEqual(await countOnFakeBox({}).then(({ count, posts }) => ({ count, posts })), { count: DEMO_RECORDINGS, posts: 4 })
 })
 
 test('count: without childCount, reads TotalMatches from one short Browse per show', async () => {
   const { count, posts } = await countOnFakeBox({ childCounts: false })
   assert.equal(count, DEMO_RECORDINGS)
-  assert.equal(posts, 2 + demoShows().length)
+  assert.equal(posts, 4 + demoShows().length + SINGLE_RECORDING_SHOWS * 2)
 })
 
 test('count: a negative childCount is ignored and each show is counted instead', async () => {
   const { count, posts } = await countOnFakeBox({ childCounts: -1 })
   assert.equal(count, DEMO_RECORDINGS)
-  assert.equal(posts, 2 + demoShows().length)
+  assert.equal(posts, 4 + demoShows().length + SINGLE_RECORDING_SHOWS * 2)
 })
 
 test('count: without childCount or TotalMatches, counts the items of each show', async () => {
   const { count, posts } = await countOnFakeBox({ childCounts: false, totalMatches: false })
   assert.equal(count, DEMO_RECORDINGS)
-  assert.equal(posts, 2 + demoShows().length * 2)
+  assert.equal(posts, 4 + demoShows().length * 3)
 })
 
 const FOUR_CORNERS = { title: 'Four Corners', items: Array.from({ length: 45 }, (_, index) => ({ title: `S1 E${index + 1} - Episode`, size: 4096, duration: '0:45:00' })) }
@@ -138,9 +141,56 @@ test('count: a capped box without childCount still counts a show of 45 from Tota
   assert.equal(count, CAPPED_RECORDINGS)
 })
 
-test('count: a capped box without childCount or TotalMatches counts what one reply per folder lists', async () => {
+test('count: a capped box without childCount or TotalMatches pages each show to the end', async () => {
   const { count } = await countOnFakeBox({ shows: [FOUR_CORNERS], browseCap: 24, childCounts: false, totalMatches: false })
-  assert.equal(count, 24)
+  assert.equal(count, 45)
+})
+
+test('count: a capped box whose TotalMatches equals each reply still counts all 45', async () => {
+  const { count } = await countOnFakeBox({ shows: [FOUR_CORNERS], browseCap: 24, childCounts: false, totalMatches: 'page' })
+  assert.equal(count, 45)
+})
+
+test('listing: a later page that fails keeps the recordings read and reports a partial listing', async () => {
+  const box = await startFakeBox({ shows: CAPPED_LIBRARY, browseCap: capLikeTheReport, failingPagesFrom: { 100: 24 } })
+  const original = console.log
+  console.log = () => {}
+  testInternals.setBrowseRetryDelay(10)
+  try {
+    const location = await connectToAddress(box.address)
+    const { shows, outcome } = await listRecordings({ location, onProgress: () => {} })
+    assert.equal(outcome.outcome, 'partial')
+    assert.deepEqual(outcome.folders, ['Four Corners'])
+    assert.equal(shows.find(show => show.title === 'Four Corners').items.length, 24)
+    assert.equal(shows.length, CAPPED_LIBRARY.length)
+    assert.match(describeListing({ address: 'nas', ...outcome }), /could not be read in full: Four Corners/)
+  } finally {
+    testInternals.setBrowseRetryDelay()
+    console.log = original
+    await box.stop()
+  }
+})
+
+test('listing: a cancelled listing stops asking the box for pages', async () => {
+  const box = await startFakeBox({ shows: CAPPED_LIBRARY, browseCap: capLikeTheReport })
+  const original = console.log
+  console.log = () => {}
+  try {
+    const location = await connectToAddress(box.address)
+    const controller = new AbortController()
+    const listing = listRecordings({ location, onProgress: () => {}, signal: controller.signal })
+    await new Promise(resolve => setTimeout(resolve, 30))
+    controller.abort()
+    const { shows, outcome } = await listing
+    const postsAtCancel = box.requests.filter(request => request.method === 'POST').length
+    await new Promise(resolve => setTimeout(resolve, 200))
+    assert.equal(outcome.outcome, 'cancelled')
+    assert.deepEqual(shows, [])
+    assert.equal(box.requests.filter(request => request.method === 'POST').length, postsAtCancel)
+  } finally {
+    console.log = original
+    await box.stop()
+  }
 })
 
 test('listing: a box that caps each Browse reply lists every show and all 45 recordings of one show', async () => {
@@ -161,10 +211,10 @@ test('listing: a box that caps each Browse reply lists every show and all 45 rec
   }
 })
 
-test('count: a Recordings folder with childCount 0 counts as no recordings after one Browse', async () => {
+test('count: a Recordings folder with childCount 0 counts as no recordings after the root Browse', async () => {
   const { count, posts } = await countOnFakeBox({ cancelled: true })
   assert.equal(count, 0)
-  assert.equal(posts, 1)
+  assert.equal(posts, 2)
 })
 
 test('count: no Recordings folder, an HTTP error, or a failed show Browse is unavailable', async () => {

@@ -98,6 +98,7 @@ export const startFakeBox = async ({
   childCounts = true,
   totalMatches = true,
   browseCap = null,
+  failingPagesFrom = {},
   cancelled = false
 } = {}) => {
   const catalogue = buildCatalogue(cancelled ? [] : shows)
@@ -119,7 +120,7 @@ export const startFakeBox = async ({
     }
     if (req.method === 'GET' && req.url === '/MediaServer.xml') return sendXml(res, mediaServerXml)
     if (req.method === 'POST' && req.url === '/web/cds_control' && cancelled) return answerCancelledBrowse({ req, res, cancelledBrowse })
-    if (req.method === 'POST' && req.url === '/upnp/control/ContentDirectory') return answerBrowseAfter({ delayMs: browseDelayMs, browses, answer: () => answerBrowse({ req, res, catalogue, baseUrl: baseUrlOf(), rootFolders, failingBrowses, forgotten, childCounts, totalMatches, browseCap }) })
+    if (req.method === 'POST' && req.url === '/upnp/control/ContentDirectory') return answerBrowseAfter({ delayMs: browseDelayMs, browses, answer: () => answerBrowse({ req, res, catalogue, baseUrl: baseUrlOf(), rootFolders, failingBrowses, forgotten, childCounts, totalMatches, browseCap, failingPagesFrom }) })
     const itemMatch = req.url.match(/^\/item\/(\d+)$/)
     if (itemMatch && (req.method === 'GET' || req.method === 'HEAD')) {
       const item = catalogue.items.get(itemMatch[1])
@@ -202,16 +203,22 @@ const answerBrowseAfter = async ({ delayMs, browses, answer }) => {
   }
 }
 
-const answerBrowse = async ({ req, res, catalogue, baseUrl, rootFolders, failingBrowses, forgotten, childCounts, totalMatches, browseCap }) => {
+const answerBrowse = async ({ req, res, catalogue, baseUrl, rootFolders, failingBrowses, forgotten, childCounts, totalMatches, browseCap, failingPagesFrom }) => {
   const body = await readBody(req)
   const objectId = objectIdOf(body)
-  if (failingBrowses.includes(objectId)) {
+  const failsFrom = failingPagesFrom[objectId]
+  if (failingBrowses.includes(objectId) || (failsFrom !== undefined && startingIndexOf(body) >= failsFrom)) {
     res.writeHead(500)
     return res.end()
   }
   const didl = forgotten.has(objectId) ? null : didlFor({ objectId, catalogue, baseUrl, rootFolders, childCounts, window: { startingIndex: startingIndexOf(body), requestedCount: requestedCountOf(body), cap: capFor({ browseCap, objectId }) } })
   if (!didl) return sendNoSuchObject(res)
-  sendXml(res, browseEnvelope({ ...didl, total: totalMatches ? didl.total : null }))
+  sendXml(res, browseEnvelope({ ...didl, total: totalMatchesFor({ totalMatches, didl }) }))
+}
+
+const totalMatchesFor = ({ totalMatches, didl }) => {
+  if (totalMatches === 'page') return didl.returned
+  return totalMatches ? didl.total : null
 }
 
 const readCancelledBrowse = async () => {

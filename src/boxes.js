@@ -85,7 +85,8 @@ const countWith = async (browse) => {
 
 const countShow = async ({ browse, objectId }) => {
   const first = await browse({ objectId, requestedCount: 1 })
-  if (Number.isInteger(first.totalMatches)) return first.totalMatches
+  const returned = listOf(first.didl.item).length
+  if (Number.isInteger(first.totalMatches) && first.totalMatches > returned) return first.totalMatches
   const { items } = await browseAll({ browse, objectId })
   return items.length
 }
@@ -94,23 +95,35 @@ const browseAll = async ({ browse, objectId }) => {
   const seen = new Set()
   const entries = { containers: [], items: [] }
   let received = 0
+  let total = null
   for (let page = 1; page <= MAX_BROWSE_PAGES; page++) {
-    const { didl, totalMatches } = await browse({ objectId, startingIndex: received })
-    const replyEntries = { containers: listOf(didl.container), items: listOf(didl.item) }
+    const isProbe = page > 1 && (total === null || seen.size >= total)
+    const reply = await browsePageOrEnd({ browse, objectId, startingIndex: received, isProbe })
+    if (!reply) break
+    const replyEntries = { containers: listOf(reply.didl.container), items: listOf(reply.didl.item) }
     const replyCount = replyEntries.containers.length + replyEntries.items.length
     const added = addUnseen({ seen, entries, replyEntries })
     received += replyCount
-    const isTotalKnown = Number.isInteger(totalMatches) && totalMatches > 0
-    if (!isTotalKnown || received >= totalMatches || replyCount === 0 || added === 0) break
+    if (Number.isInteger(reply.totalMatches) && reply.totalMatches > 0) total = reply.totalMatches
+    if (replyCount === 0 || added === 0) break
   }
   return entries
+}
+
+const browsePageOrEnd = async ({ browse, objectId, startingIndex, isProbe }) => {
+  try {
+    return await browse({ objectId, startingIndex })
+  } catch (error) {
+    if (isProbe && error.name !== 'AbortError' && error.name !== 'CanceledError') return null
+    throw error
+  }
 }
 
 const addUnseen = ({ seen, entries, replyEntries }) => {
   let added = 0
   for (const kind of ['containers', 'items']) {
     for (const node of replyEntries[kind]) {
-      const key = node['@_id'] === undefined ? Symbol(kind) : `${kind}:${node['@_id']}`
+      const key = node['@_id'] === undefined ? `${kind}:no-id:${JSON.stringify(node)}` : `${kind}:${node['@_id']}`
       if (seen.has(key)) continue
       seen.add(key)
       entries[kind].push(node)

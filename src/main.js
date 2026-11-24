@@ -40,6 +40,7 @@ const state = {
   shows: [],
   summaries: [],
   listingRequest: 0,
+  listing: null,
   activeSave: null,
   savedFolder: null,
   closingAfterStop: false,
@@ -507,9 +508,12 @@ const registerIpc = ({ settings, history }) => {
     const request = ++state.listingRequest
     const isLatestRequest = () => request === state.listingRequest
     const onProgress = (progress) => { if (isLatestRequest()) send('recordings:progress', progress) }
+    state.listing?.abort()
+    const listing = new AbortController()
+    state.listing = listing
     try {
       const address = new URL(location.url).hostname
-      const { shows, summaries, outcome } = await listRecordings({ location, onProgress })
+      const { shows, summaries, outcome } = await listRecordings({ location, onProgress, signal: listing.signal })
       state.log.write(describeListing({ address, ...outcome }))
       if (!isLatestRequest()) return { error: 'superseded' }
       const problem = listingProblemFor(outcome.outcome)
@@ -527,10 +531,12 @@ const registerIpc = ({ settings, history }) => {
       state.summaries = summaries.map(show => ({ ...show, episodes: show.episodes.map(episode => ({ ...episode, saved: saved[episode.id] })) }))
       state.boxKey = box.key
       await settings.update({ lastAddress: box.address })
-      return { shows: state.summaries }
+      return { shows: state.summaries, incomplete: outcome.outcome === 'partial' }
     } catch (error) {
       state.log.write(`Could not list recordings from box ${location.url}: ${describeError(error)}`)
       return { error: 'list-failed' }
+    } finally {
+      if (state.listing === listing) state.listing = null
     }
   })
 
