@@ -4,12 +4,12 @@ import { parseBoxAddress, describeBox, findBoxes, connectToAddress, countRecordi
 import { FETCH_MANUFACTURER_URL, MEDIA_SERVER_TARGET, parseSearchResponse, searchForFetchBoxes } from '../src/discovery.js'
 import { plainReason, summariseResults } from '../src/saving.js'
 import { describeFolder } from '../src/folders.js'
-import { describeListing, listingProblemFor } from '../src/recordings.js'
+import { describeListing, listRecordings, listingProblemFor } from '../src/recordings.js'
 import { createInstallAccessRecord, previousStartFailedAccessCheck } from '../src/install-access.js'
 import { createLaunchGuard } from '../src/launch-guard.js'
 import { createSettings } from '../src/settings.js'
 import { createHistory } from '../src/history.js'
-import { demoShows, startFakeBox } from './fake-box.mjs'
+import { bigLibrary, demoShows, startFakeBox } from './fake-box.mjs'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -121,6 +121,44 @@ test('count: without childCount or TotalMatches, counts the items of each show',
   const { count, posts } = await countOnFakeBox({ childCounts: false, totalMatches: false })
   assert.equal(count, DEMO_RECORDINGS)
   assert.equal(posts, 2 + demoShows().length * 2)
+})
+
+const FOUR_CORNERS = { title: 'Four Corners', items: Array.from({ length: 45 }, (_, index) => ({ title: `S1 E${index + 1} - Episode`, size: 4096, duration: '0:45:00' })) }
+const CAPPED_LIBRARY = [FOUR_CORNERS, ...bigLibrary({ size: 4096 })]
+const CAPPED_RECORDINGS = CAPPED_LIBRARY.flatMap(show => show.items).length
+const capLikeTheReport = (objectId) => (objectId === '1' ? 3 : 24)
+
+test('count: a box that caps each Browse reply still counts every show folder', async () => {
+  const { count } = await countOnFakeBox({ shows: CAPPED_LIBRARY, browseCap: capLikeTheReport })
+  assert.equal(count, CAPPED_RECORDINGS)
+})
+
+test('count: a capped box without childCount still counts a show of 45 from TotalMatches', async () => {
+  const { count } = await countOnFakeBox({ shows: CAPPED_LIBRARY, browseCap: capLikeTheReport, childCounts: false })
+  assert.equal(count, CAPPED_RECORDINGS)
+})
+
+test('count: a capped box without childCount or TotalMatches counts what one reply per folder lists', async () => {
+  const { count } = await countOnFakeBox({ shows: [FOUR_CORNERS], browseCap: 24, childCounts: false, totalMatches: false })
+  assert.equal(count, 24)
+})
+
+test('listing: a box that caps each Browse reply lists every show and all 45 recordings of one show', async () => {
+  const box = await startFakeBox({ shows: CAPPED_LIBRARY, browseCap: capLikeTheReport })
+  const original = console.log
+  console.log = () => {}
+  try {
+    const location = await connectToAddress(box.address)
+    const { shows, outcome } = await listRecordings({ location, onProgress: () => {} })
+    const listed = Object.fromEntries(shows.map(show => [show.title, show.items.length]))
+    assert.equal(outcome.outcome, 'ok')
+    assert.deepEqual(listed, Object.fromEntries(CAPPED_LIBRARY.map(show => [show.title, show.items.length])))
+    assert.equal(listed['Four Corners'], 45)
+    assert.equal(await countRecordings({ location }), CAPPED_RECORDINGS)
+  } finally {
+    console.log = original
+    await box.stop()
+  }
 })
 
 test('count: a Recordings folder with childCount 0 counts as no recordings after one Browse', async () => {
