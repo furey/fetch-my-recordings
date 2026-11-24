@@ -97,6 +97,11 @@ export const startFakeBox = async ({
   browseDelayMs = 0,
   childCounts = true,
   totalMatches = true,
+  browseCap = null,
+  failingPagesFrom = {},
+  hangsPastEnd = false,
+  emptyItemIds = false,
+  onBrowse = () => {},
   cancelled = false
 } = {}) => {
   const catalogue = buildCatalogue(cancelled ? [] : shows)
@@ -118,7 +123,7 @@ export const startFakeBox = async ({
     }
     if (req.method === 'GET' && req.url === '/MediaServer.xml') return sendXml(res, mediaServerXml)
     if (req.method === 'POST' && req.url === '/web/cds_control' && cancelled) return answerCancelledBrowse({ req, res, cancelledBrowse })
-    if (req.method === 'POST' && req.url === '/upnp/control/ContentDirectory') return answerBrowseAfter({ delayMs: browseDelayMs, browses, answer: () => answerBrowse({ req, res, catalogue, baseUrl: baseUrlOf(), rootFolders, failingBrowses, forgotten, childCounts, totalMatches }) })
+    if (req.method === 'POST' && req.url === '/upnp/control/ContentDirectory') return answerBrowseAfter({ delayMs: browseDelayMs, browses, answer: () => answerBrowse({ req, res, catalogue, baseUrl: baseUrlOf(), rootFolders, failingBrowses, forgotten, childCounts, totalMatches, browseCap, failingPagesFrom, hangsPastEnd, onBrowse, emptyItemIds }) })
     const itemMatch = req.url.match(/^\/item\/(\d+)$/)
     if (itemMatch && (req.method === 'GET' || req.method === 'HEAD')) {
       const item = catalogue.items.get(itemMatch[1])
@@ -201,16 +206,24 @@ const answerBrowseAfter = async ({ delayMs, browses, answer }) => {
   }
 }
 
-const answerBrowse = async ({ req, res, catalogue, baseUrl, rootFolders, failingBrowses, forgotten, childCounts, totalMatches }) => {
+const answerBrowse = async ({ req, res, catalogue, baseUrl, rootFolders, failingBrowses, forgotten, childCounts, totalMatches, browseCap, failingPagesFrom, hangsPastEnd, onBrowse, emptyItemIds }) => {
   const body = await readBody(req)
   const objectId = objectIdOf(body)
-  if (failingBrowses.includes(objectId)) {
+  onBrowse({ objectId, startingIndex: startingIndexOf(body) })
+  const failsFrom = failingPagesFrom[objectId]
+  if (failingBrowses.includes(objectId) || (failsFrom !== undefined && startingIndexOf(body) >= failsFrom)) {
     res.writeHead(500)
     return res.end()
   }
-  const didl = forgotten.has(objectId) ? null : didlFor({ objectId, catalogue, baseUrl, rootFolders, childCounts, requestedCount: requestedCountOf(body) })
+  const didl = forgotten.has(objectId) ? null : didlFor({ objectId, catalogue, baseUrl, rootFolders, childCounts, emptyItemIds, window: { startingIndex: startingIndexOf(body), requestedCount: requestedCountOf(body), cap: capFor({ browseCap, objectId }) } })
   if (!didl) return sendNoSuchObject(res)
-  sendXml(res, browseEnvelope({ ...didl, total: totalMatches ? didl.total : null }))
+  if (hangsPastEnd && didl.returned === 0 && startingIndexOf(body) > 0) return
+  sendXml(res, browseEnvelope({ ...didl, total: totalMatchesFor({ totalMatches, didl }) }))
+}
+
+const totalMatchesFor = ({ totalMatches, didl }) => {
+  if (totalMatches === 'page') return didl.returned
+  return totalMatches ? didl.total : null
 }
 
 const readCancelledBrowse = async () => {
@@ -228,6 +241,10 @@ const answerCancelledBrowse = async ({ req, res, cancelledBrowse }) => {
 
 const objectIdOf = (body) => body.match(/<ObjectID>([^<]*)<\/ObjectID>/)?.[1] ?? '0'
 
+const startingIndexOf = (body) => Number(body.match(/<StartingIndex>(\d+)<\/StartingIndex>/)?.[1] ?? 0)
+
+const capFor = ({ browseCap, objectId }) => (typeof browseCap === 'function' ? browseCap(objectId) : browseCap)
+
 const requestedCountOf = (body) => Number(body.match(/<RequestedCount>(\d+)<\/RequestedCount>/)?.[1] ?? 0)
 
 const sendNoSuchObject = async (res) => {
@@ -237,26 +254,28 @@ const sendNoSuchObject = async (res) => {
 
 const ROOT_FOLDER_IDS = { Recordings: '1', 'Live TV': '2' }
 
-const didlFor = ({ objectId, catalogue, baseUrl, rootFolders, childCounts, requestedCount }) => {
+const didlFor = ({ objectId, catalogue, baseUrl, rootFolders, childCounts, emptyItemIds, window }) => {
   const childCountFor = (size) => {
     if (typeof childCounts === 'number') return childCounts
     return childCounts ? size : null
   }
   if (objectId === '0') {
     const sizeOf = (title) => (title === 'Recordings' ? catalogue.showFolders.length : 0)
-    return pageOf({ requestedCount, entries: rootFolders.map(title => container({ id: ROOT_FOLDER_IDS[title] ?? title, parentId: '0', title, childCount: childCountFor(sizeOf(title)) })) })
+    return pageOf({ window, entries: rootFolders.map(title => container({ id: ROOT_FOLDER_IDS[title] ?? title, parentId: '0', title, childCount: childCountFor(sizeOf(title)) })) })
   }
   if (objectId === '1') {
-    return pageOf({ requestedCount, entries: catalogue.showFolders.map(show => container({ id: show.id, parentId: '1', title: show.title, childCount: childCountFor(show.items.length) })) })
+    return pageOf({ window, entries: catalogue.showFolders.map(show => container({ id: show.id, parentId: '1', title: show.title, childCount: childCountFor(show.items.length) })) })
   }
-  if (rootFolders.some(title => (ROOT_FOLDER_IDS[title] ?? title) === objectId)) return pageOf({ requestedCount, entries: [] })
+  if (rootFolders.some(title => (ROOT_FOLDER_IDS[title] ?? title) === objectId)) return pageOf({ window, entries: [] })
   const show = catalogue.showFolders.find(folder => folder.id === objectId)
   if (!show) return null
-  return pageOf({ requestedCount, entries: show.items.map(item => itemXml({ item, baseUrl })) })
+  return pageOf({ window, entries: show.items.map(item => itemXml({ item, baseUrl, emptyId: emptyItemIds })) })
 }
 
-const pageOf = ({ requestedCount, entries }) => {
-  const returned = requestedCount > 0 ? entries.slice(0, requestedCount) : entries
+const pageOf = ({ window: { startingIndex, requestedCount, cap }, entries }) => {
+  const limits = [requestedCount, cap].filter(limit => limit > 0)
+  const size = limits.length > 0 ? Math.min(...limits) : entries.length
+  const returned = entries.slice(startingIndex, startingIndex + size)
   return { xml: returned.join(''), returned: returned.length, total: entries.length }
 }
 
@@ -265,10 +284,10 @@ const container = ({ id, parentId, title, childCount = null }) => {
   return `<container id="${id}" parentID="${parentId}"${childCountAttribute} restricted="1"><dc:title>${escapeXml(title)}</dc:title><upnp:class>object.container</upnp:class></container>`
 }
 
-const itemXml = ({ item, baseUrl }) => {
+const itemXml = ({ item, baseUrl, emptyId = false }) => {
   const listedSize = listedSizeOf(item)
   const taskName = item.parentTaskName ? ` parentTaskName="${escapeXml(item.parentTaskName)}"` : ''
-  return `<item id="${item.id}" parentID="${item.parentId}" restricted="1"><dc:title>${escapeXml(item.title)}</dc:title>` +
+  return `<item id="${emptyId ? '' : item.id}" parentID="${item.parentId}" restricted="1"><dc:title>${escapeXml(item.title)}</dc:title>` +
     `<dc:description>${escapeXml(item.title)}</dc:description><upnp:class>object.item.videoItem</upnp:class>` +
     `<res protocolInfo="http-get:*:video/mpeg-tts:DLNA.ORG_PN=AVC_TS_HD_AC3;DLNA.ORG_OP=01" size="${listedSize}" duration="${item.duration ?? '0:30:00'}"${taskName}>` +
     `${baseUrl}/item/${item.id}</res></item>`
