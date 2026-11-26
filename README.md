@@ -345,6 +345,9 @@ If the app cannot show the recordings, its message says why:
 - **The box did not send its recordings**: the box answered, but not the request for its list of recordings. This does not mean the box has no recordings. Turn the box off at the wall, wait 10 seconds, turn it on again, then click **Try again**.
 - **The box is not sharing its recordings**: check the TV. If it shows the Fetch setup or activation screen, the box has lost its Fetch service (the account is cancelled or suspended, or the box cannot reach the internet). The app cannot list the recordings until the box has its Fetch service again.
 - **No recordings on this box**: the box answered, and it has no recordings.
+- **Some recordings could not be read from the box**: the box stopped answering part way through its list. Click **Try again**. The recordings you ticked stay ticked.
+
+If the list shows fewer shows or recordings than your Fetch box has, and no message, the box itself can be the cause. Turn the box off at the wall, wait 15 seconds, turn it on again, then search for the box again. One user's box listed 24 of 45 episodes of a show until a restart, in this app and in `fetchtv`.
 
 The app writes each result to `main.log` in its [log folder](#if-the-app-does-not-open). If you ask for help, attach that file.
 
